@@ -1,0 +1,47 @@
+diff --git a/bin/build-drivers/deps.edn b/bin/build-drivers/deps.edn
+index 72ba9ef..e3d83ad 100644
+--- a/bin/build-drivers/deps.edn
++++ b/bin/build-drivers/deps.edn
+@@ -18,6 +18,9 @@
+   metabase/metabase-core          {:local/root "../.."}
+   metabase/driver-modules         {:local/root "../../modules/drivers"}}
+ 
++ :mvn/repos
++ {"sonatype" {:url "https://oss.sonatype.org/content/groups/staging/"}}
++
+  :jvm-opts
+  ["-XX:-OmitStackTraceInFastThrow"]
+ 
+diff --git a/deps.edn b/deps.edn
+index 21d34d6..44ca1d1 100644
+--- a/deps.edn
++++ b/deps.edn
+@@ -155,6 +155,8 @@
+  ;; !!                            *PLEASE DO NOT* ADD NEW ONES TO THE BOTTOM OF THE LIST.                            !!
+  ;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ 
++ :mvn/repos
++ {"sonatype" {:url "https://oss.sonatype.org/content/groups/staging/"}}
+ 
+  :paths
+  ["src" "shared/src" "resources"]
+@@ -277,6 +279,7 @@
+     "modules/drivers/druid/test"
+     "modules/drivers/googleanalytics/test"
+     "modules/drivers/mongo/test"
++    "modules/drivers/ocient/test"
+     "modules/drivers/oracle/test"
+     "modules/drivers/presto/test"
+     "modules/drivers/presto-common/test"
+diff --git a/modules/drivers/deps.edn b/modules/drivers/deps.edn
+index 9881084..07cc55c 100644
+--- a/modules/drivers/deps.edn
++++ b/modules/drivers/deps.edn
+@@ -3,6 +3,7 @@
+   metabase/druid              {:local/root "druid"}
+   metabase/googleanalytics    {:local/root "googleanalytics"}
+   metabase/mongo              {:local/root "mongo"}
++  metabase/ocient             {:local/root "ocient"}
+   metabase/oracle             {:local/root "oracle"}
+   metabase/presto             {:local/root "presto"}
+   metabase/presto-common      {:local/root "presto-common"}
