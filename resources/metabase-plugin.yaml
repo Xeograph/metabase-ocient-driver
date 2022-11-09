@@ -24,6 +24,11 @@ driver:
           placeholder: DATABASE NAME
     - user
     - password
+    - advanced-options-start
+    - merge:
+        - additional-options
+        - display-name: Additional connection string options (optional)
+    - default-advanced-options
   connection-properties-include-tunnel-config: false
 init:
   - step: load-namespace
