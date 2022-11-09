@@ -56,7 +56,7 @@ RUN clojure -X:test:deps prep
 
 ENV MB_OCIENT_TEST_HOST=${MB_OCIENT_TEST_HOST}
 ENV MB_OCIENT_TEST_PORT=${MB_OCIENT_TEST_PORT}
-ENV Drivers=ocient
+ENV DRIVERS=ocient
 CMD ["clojure", "-X:dev:drivers:drivers-dev:test", ":only", "metabase.driver.ocient-unit-test"]
 
 # We create an export stage to make it easy to export the driver
