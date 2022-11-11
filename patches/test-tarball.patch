@@ -27,7 +27,7 @@ index 68ed0c9..2163108 100644
                          :src-dirs   paths
                          :class-dir  class-dir
 diff --git a/deps.edn b/deps.edn
-index 4e2f602..bf4f701 100644
+index 4e2f602..e1fc813 100644
 --- a/deps.edn
 +++ b/deps.edn
 @@ -154,7 +154,7 @@
@@ -85,7 +85,15 @@ index 4e2f602..bf4f701 100644
  
    :oss-dev
    {}
-@@ -403,7 +428,11 @@
+@@ -268,6 +293,7 @@
+     "modules/drivers/druid/test"
+     "modules/drivers/googleanalytics/test"
+     "modules/drivers/mongo/test"
++    "modules/drivers/ocient/test"
+     "modules/drivers/oracle/test"
+     "modules/drivers/presto/test"
+     "modules/drivers/presto-common/test"
+@@ -403,7 +429,11 @@
    {:deps       {io.github.clojure/tools.build   {:git/tag "v0.7.5" :git/sha "2526f58"}
                  com.github.seancorfield/depstar {:mvn/version "2.1.303"}
                  metabase/build.common           {:local/root "bin/common"}

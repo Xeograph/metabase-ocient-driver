@@ -13,10 +13,10 @@ index 72ba9ef..e3d83ad 100644
   ["-XX:-OmitStackTraceInFastThrow"]
  
 diff --git a/deps.edn b/deps.edn
-index 21d34d6..44ca1d1 100644
+index 4e2f602..75d4a9b 100644
 --- a/deps.edn
 +++ b/deps.edn
-@@ -155,6 +155,8 @@
+@@ -152,6 +152,8 @@
   ;; !!                            *PLEASE DO NOT* ADD NEW ONES TO THE BOTTOM OF THE LIST.                            !!
   ;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  
@@ -25,7 +25,7 @@ index 21d34d6..44ca1d1 100644
  
   :paths
   ["src" "shared/src" "resources"]
-@@ -277,6 +279,7 @@
+@@ -268,6 +270,7 @@
      "modules/drivers/druid/test"
      "modules/drivers/googleanalytics/test"
      "modules/drivers/mongo/test"
