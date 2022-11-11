@@ -1,7 +1,12 @@
 ARG METABASE_VERSION=v0.44.4
+ARG METABASE_OCIENT_VERSION=v0.1.0-rc.2
 ARG MB_OCIENT_TEST_HOST=172.17.0.1
 ARG MB_OCIENT_TEST_PORT=4050
 
+
+#################
+# Metabase repo #
+#################
 FROM clojure:openjdk-11-tools-deps-slim-buster AS stg_base
 
 # Reequirements for building the driver
@@ -23,16 +28,21 @@ ARG METABASE_VERSION
 RUN curl -Lo - https://github.com/metabase/metabase/archive/refs/tags/${METABASE_VERSION}.tar.gz | tar -xz \
     && mv metabase-* metabase
 
+WORKDIR /build/metabase
+
+######################################
+# Base stage with Ocient driver deps #
+######################################
+FROM stg_base as stg_driver
+
 # Copy our project assets over
 COPY deps.edn /build/metabase/modules/drivers/ocient/
 COPY src/ /build/metabase/modules/drivers/ocient/src
 COPY resources/ /build/metabase/modules/drivers/ocient/resources
 
-WORKDIR /build/metabase
-COPY ocient.patch /build/
-
 # Link any Ocient deps required to build or test the driver
-RUN git apply /build/ocient.patch
+COPY patches/ocient-driver.patch /build/
+RUN git apply /build/ocient-driver.patch
 
 # Then prep our Metabase dependencies
 # We need to build java deps
@@ -40,17 +50,25 @@ RUN git apply /build/ocient.patch
 RUN --mount=type=cache,target=/root/.m2/repository \
     clojure -X:deps prep
 
-# Now build the driver
-FROM stg_base as stg_build
+
+###########################
+# Build the Ocient driver #
+###########################
+FROM stg_driver as stg_driver_build
+
 RUN --mount=type=cache,target=/root/.m2/repository \
     bin/build-driver.sh ocient
 
-# Test stage
-FROM stg_build as stg_test
+
+###########################
+# Test the Ocient driver #
+###########################
+FROM stg_driver as stg_driver_test
+
 ARG MB_OCIENT_TEST_HOST
 ARG MB_OCIENT_TEST_PORT
 COPY test/ /build/metabase/modules/drivers/ocient/test
-COPY --from=stg_build /build/metabase/resources/modules/ocient.metabase-driver.jar /build/metabase/plugins/
+COPY --from=stg_driver_build /build/metabase/resources/modules/ocient.metabase-driver.jar /build/metabase/plugins/
 RUN clojure -X:test:deps prep
 # Some dependencies still get downloaded when the command below is run, but I'm not sure why
 
@@ -59,15 +77,55 @@ ENV MB_OCIENT_TEST_PORT=${MB_OCIENT_TEST_PORT}
 ENV DRIVERS=ocient
 CMD ["clojure", "-X:dev:drivers:drivers-dev:test", ":only", "metabase.driver.ocient-unit-test"]
 
-# We create an export stage to make it easy to export the driver
-FROM scratch as stg_export
-COPY --from=stg_build /build/metabase/resources/modules/ocient.metabase-driver.jar /
 
-# Now we can run Metabase with our built driver
+############################
+# Export the Ocient driver #
+############################
+FROM scratch as stg_driver_export
+COPY --from=stg_driver_build /build/metabase/resources/modules/ocient.metabase-driver.jar /
+
+
+######################
+# Test tarball stage #
+######################
+FROM stg_base as stg_test_tarball
+
+COPY test/ /build/metabase/modules/drivers/ocient/test
+COPY patches/test-tarball.patch /build/
+RUN git apply /build/test-tarball.patch
+
+# Build the uberjar
+RUN --mount=type=cache,target=/root/.m2/repository \ 
+    clojure -T:dev:build uberjar
+
+# Place uberjar and remaining deps in a tarball
+RUN mv target/uberjar/metabase.jar . \
+    && tar rvf target/metabase_test.tar ./metabase.jar \
+    && tar rvf target/metabase_test.tar ./test_modules/drivers/secret-test-driver/resources/metabase-plugin.yaml \
+    && tar rvf target/metabase_test.tar ./test_modules/drivers/driver-deprecation-test-new/resources/metabase-plugin.yaml \
+    && tar rvf target/metabase_test.tar ./test_modules/drivers/driver-deprecation-test-legacy/resources/metabase-plugin.yaml \
+    && tar rvf target/metabase_test.tar ./README.md \
+    && tar rvf target/metabase_test.tar ./frontend/test/__runner__/test_db_fixture.db.mv.db \
+    && tar rvf target/metabase_test.tar ./frontend/test/__runner__/empty.db.mv.db \
+    && tar rvf target/metabase_test.tar ./test_resources/* \
+    && tar rvf target/metabase_test.tar ./test/metabase/test/data/dataset_definitions/*.edn \
+    && gzip target/metabase_test.tar
+
+
+#############################
+# Test Tarball Export stage #
+#############################
+FROM scratch as stg_test_tarball_export
+COPY --from=stg_test_tarball /build/metabase/target/metabase_test.tar.gz /
+
+
+################
+# Run Metabase #
+################
 FROM metabase/metabase:${METABASE_VERSION} AS stg_runner
 
 # A metabase user/group is manually added in https://github.com/metabase/metabase/blob/master/bin/docker/run_metabase.sh
 # Make the UID and GID match
-COPY --chown=2000:2000 --from=stg_build \
+COPY --chown=2000:2000 --from=stg_driver_build \
     /build/metabase/resources/modules/ocient.metabase-driver.jar \
     /plugins/ocient.metabase-driver.jar

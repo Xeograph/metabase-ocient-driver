@@ -37,7 +37,7 @@ The entire Metabase JAR, including the Ocient driver, can be built using the pro
 Build the image and copy the jar from the export stage.
 
 ```shell
-docker build --output jars --target stg_export .
+docker build --output jars --target stg_driver_export .
 ```
 
 The `ocient.metabase-driver.jar` file will be placed in the `jars/` directory.

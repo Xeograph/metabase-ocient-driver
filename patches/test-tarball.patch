@@ -1,0 +1,557 @@
+diff --git a/build.clj b/build.clj
+index 68ed0c9..2163108 100644
+--- a/build.clj
++++ b/build.clj
+@@ -7,6 +7,8 @@
+             [clojure.tools.namespace.find :as ns.find]
+             [clojure.tools.namespace.parse :as ns.parse]
+             [hf.depstar.api :as depstar]
++            [metabase.core]
++            [metabase.test-runner]
+             [metabuild-common.core :as u])
+   (:import java.io.OutputStream
+            java.net.URI
+@@ -78,6 +80,14 @@
+           ns-decls (u/step "Determine compilation order for Metabase files"
+                      (metabase-namespaces-in-topo-order basis))]
+       (with-duration-ms [duration-ms]
++        ;; Clojure scans the source files to find tests. Compiling the uber jar
++        ;; changes the file structure, so we will scan for tests at compile time
++        ;; and store them in a file 'namespace-whitelist.txt' in the uberjar. 
++        ;; At runtime, this file will be used to run the tests.
++        (b/write-file {:path (str class-dir "/namespace-whitelist.txt")
++                       :string (clojure.string/join \newline
++                                                    (mapv #(subs (str %) 2)
++                                                          (metabase.test-runner/find-tests ["local/src", "dev/src", "shared/test", "resources", "src", "test", "shared/src", "test_resources", "test_config"])))})
+         (b/compile-clj {:basis      basis
+                         :src-dirs   paths
+                         :class-dir  class-dir
+diff --git a/deps.edn b/deps.edn
+index 4e2f602..bf4f701 100644
+--- a/deps.edn
++++ b/deps.edn
+@@ -154,7 +154,7 @@
+ 
+ 
+  :paths
+- ["src" "shared/src" "resources"]
++ ["src" "test" "shared/src" "resources" "dev/src" "local/src" "shared/test" "test_resources" "test_config"]
+ 
+  :aliases
+  {
+@@ -222,9 +222,19 @@
+   ;; clojure -M:run:ee (include EE code)
+   :run
+   {:main-opts ["-m" "metabase.core"]
+-   :jvm-opts  ["-Dmb.run.mode=dev"
++   :extra-deps {clj-http-fake/clj-http-fake                           {:mvn/version "1.0.3"}
++                eftest/eftest                                         {:mvn/version "0.5.9"}
++                pjstadig/humane-test-output                           {:mvn/version "0.11.0"}}
++   :source-paths ["test" "src"  "shared/src" "resources"  "dev/src" "local/src" "shared/test" "test_resources" "test_config"]
++
++   :jvm-opts  ["-Dmb.run.mode=test"
+                "-Djava.awt.headless=true"                   ; prevent Java icon from randomly popping up in macOS dock
+-               "-Dmb.jetty.port=3000"]}
++               "-Dmb.db.in.memory=true"
++               "-Dmb.jetty.join=false"
++               "-Dmb.field.filter.operators.enabled=true"
++               "-Dmb.api.key=test-api-key"
++               ;; Different port from normal `:dev` so you can run tests on a different server.
++               "-Dmb.jetty.port=3001"]}
+ 
+   ;; alias for CI-specific options.
+   :ci
+@@ -244,7 +254,22 @@
+ 
+   ;; these aliases exist for symmetry with the ee aliases. Empty for now.
+   :oss
+-  {}
++  {:extra-deps {eftest/eftest                                         {:mvn/version "0.5.9"}
++                pjstadig/humane-test-output                           {:mvn/version "0.11.0"}
++                clj-http/clj-http                         {:mvn/version "3.12.3"              ; HTTP client
++                                                           :exclusions  [commons-codec/commons-codec
++                                                                         commons-io/commons-io
++                                                                         slingshot/slingshot]}
++                clj-http-fake/clj-http-fake                           {:mvn/version "1.0.3"
++                                                                       :exclusions  [slingshot/slingshot]}
++                cloverage/cloverage                                   {:mvn/version "1.2.2"}
++                jonase/eastwood                                       {:mvn/version "1.2.2"}
++                lein-check-namespace-decls/lein-check-namespace-decls {:mvn/version "1.0.4"} ; misnomer since this works on Clojure CLI now too
++                reifyhealth/specmonstah                               {:mvn/version "2.0.0"
++                                                                       :exclusions  [org.clojure/clojure
++                                                                                     org.clojure/clojurescript]}
++                ring/ring-mock                                        {:mvn/version "0.4.0"}
++                talltale/talltale                                     {:mvn/version "0.5.8"}}}
+ 
+   :oss-dev
+   {}
+@@ -403,7 +428,11 @@
+   {:deps       {io.github.clojure/tools.build   {:git/tag "v0.7.5" :git/sha "2526f58"}
+                 com.github.seancorfield/depstar {:mvn/version "2.1.303"}
+                 metabase/build.common           {:local/root "bin/common"}
+-                metabase/buid-mb                {:local/root "bin/build-mb"}}
++                metabase/buid-mb                {:local/root "bin/build-mb"}
++                eftest/eftest                                         {:mvn/version "0.5.9"}
++                pjstadig/humane-test-output                           {:mvn/version "0.11.0"}}
++   :source-paths ["." "test" "src"  "shared/src" "resources"  "dev/src" "local/src" "shared/test" "test_resources" "test_config"]
++   :extra-paths ["."]
+    :ns-default build}
+ 
+ ;;; Other misc convenience aliases
+diff --git a/src/metabase/core.clj b/src/metabase/core.clj
+index 92df5cf..a9e6a09 100644
+--- a/src/metabase/core.clj
++++ b/src/metabase/core.clj
+@@ -3,6 +3,8 @@
+   (:require [clojure.string :as str]
+             [clojure.tools.logging :as log]
+             [clojure.tools.trace :as trace]
++            [eftest.report :refer [report-to-file]]
++            [eftest.report.junit :as ju]
+             [java-time :as t]
+             [metabase.analytics.prometheus :as prometheus]
+             [metabase.config :as config]
+@@ -21,6 +23,8 @@
+             [metabase.server.handler :as handler]
+             [metabase.setup :as setup]
+             [metabase.task :as task]
++            [metabase.test.data.interface :as tx]
++            [metabase.test-runner :as runner]
+             [metabase.troubleshooting :as troubleshooting]
+             [metabase.util :as u]
+             [metabase.util.i18n :refer [deferred-trs trs]]
+@@ -181,10 +185,23 @@
+ 
+ ;;; ------------------------------------------------ App Entry Point -------------------------------------------------
+ 
++(defonce user-dir
++  (System/getProperty "user.dir"))
++
+ (defn -main
+   "Launch Metabase in standalone mode."
+   [& [cmd & args]]
+   (maybe-enable-tracing)
+-  (if cmd
+-    (run-cmd cmd args) ; run a command like `java -jar metabase.jar migrate release-locks` or `clojure -M:run migrate release-locks`
+-    (start-normally))) ; with no command line args just start Metabase normally
++  (let 
++   [namespace-whitelist-path (tx/db-test-env-var :ocient :namespace-whitelist-path  (clojure.java.io/resource "namespace-whitelist.txt"))
++    namespace-blacklist-path (tx/db-test-env-var :ocient :namespace-blacklist-path nil)
++    junit-report-path (tx/db-test-env-var-or-throw :ocient :reportpath "junit_report.xml")
++    
++    namespace-whitelist (str/split (slurp namespace-whitelist-path) #"\n") 
++    namespace-blacklist (if (nil? namespace-blacklist-path)
++                          (set nil)
++                          (set (str/split (slurp namespace-blacklist-path) #"\n")))
++    
++    tests (remove #(contains? namespace-blacklist %) namespace-whitelist)]
++    (runner/run-tests {:only (mapv symbol tests)
++                       :report (report-to-file ju/report junit-report-path)}))) ; with no command line args just start Metabase normally
+diff --git a/test/metabase/analytics/stats_test.clj b/test/metabase/analytics/stats_test.clj
+index 66111a0..92afe6b 100644
+--- a/test/metabase/analytics/stats_test.clj
++++ b/test/metabase/analytics/stats_test.clj
+@@ -107,92 +107,3 @@
+          (#'stats/execution-metrics))
+       "the new lazy-seq version of the executions metrics works the same way the old one did"))
+ 
+-
+-;;; +----------------------------------------------------------------------------------------------------------------+
+-;;; |                                                Pulses & Alerts                                                 |
+-;;; +----------------------------------------------------------------------------------------------------------------+
+-
+-;; make sure we get some reasonable Pulses & Alert metrics, and they filter each other out as appropriate
+-
+-;;  alert_condition character varying(254), -- Condition (i.e. "rows" or "goal") used as a guard for alerts
+-;;  alert_first_only boolean, -- True if the alert should be disabled after the first notification
+-;;  alert_above_goal boolean, -- For a goal condition, alert when above the goal
+-(deftest pulses-and-alerts-test
+-  (tt/with-temp* [Card         [c]
+-                  ;; ---------- Pulses ----------
+-                  Pulse        [p1]
+-                  Pulse        [p2]
+-                  Pulse        [p3]
+-                  PulseChannel [_ {:pulse_id (u/the-id p1), :schedule_type "daily", :channel_type "email"}]
+-                  PulseChannel [_ {:pulse_id (u/the-id p1), :schedule_type "weekly", :channel_type "email"}]
+-                  PulseChannel [_ {:pulse_id (u/the-id p2), :schedule_type "daily", :channel_type "slack"}]
+-                  ;; Pulse 1 gets 2 Cards (1 CSV)
+-                  PulseCard    [_ {:pulse_id (u/the-id p1), :card_id (u/the-id c)}]
+-                  PulseCard    [_ {:pulse_id (u/the-id p1), :card_id (u/the-id c), :include_csv true}]
+-                  ;; Pulse 2 gets 1 Card
+-                  PulseCard    [_ {:pulse_id (u/the-id p1), :card_id (u/the-id c)}]
+-                  ;; Pulse 3 gets 7 Cards (1 CSV, 2 XLS, 2 BOTH)
+-                  PulseCard    [_ {:pulse_id (u/the-id p3), :card_id (u/the-id c)}]
+-                  PulseCard    [_ {:pulse_id (u/the-id p3), :card_id (u/the-id c)}]
+-                  PulseCard    [_ {:pulse_id (u/the-id p3), :card_id (u/the-id c), :include_csv true}]
+-                  PulseCard    [_ {:pulse_id (u/the-id p3), :card_id (u/the-id c), :include_xls true}]
+-                  PulseCard    [_ {:pulse_id (u/the-id p3), :card_id (u/the-id c), :include_xls true}]
+-                  PulseCard    [_ {:pulse_id (u/the-id p3), :card_id (u/the-id c), :include_csv true, :include_xls true}]
+-                  PulseCard    [_ {:pulse_id (u/the-id p3), :card_id (u/the-id c), :include_csv true, :include_xls true}]
+-                  ;; ---------- Alerts ----------
+-                  Pulse        [a1 {:alert_condition "rows", :alert_first_only false}]
+-                  Pulse        [a2 {:alert_condition "rows", :alert_first_only true}]
+-                  Pulse        [a3 {:alert_condition "goal", :alert_first_only false}]
+-                  Pulse        [a4 {:alert_condition "goal", :alert_first_only false, :alert_above_goal true}]
+-                  ;; Alert 1 is Email, Alert 2 is Email & Slack, Alert 3 is Slack-only
+-                  PulseChannel [_ {:pulse_id (u/the-id a1), :channel_type "email"}]
+-                  PulseChannel [_ {:pulse_id (u/the-id a1), :channel_type "email"}]
+-                  PulseChannel [_ {:pulse_id (u/the-id a2), :channel_type "slack"}]
+-                  PulseChannel [_ {:pulse_id (u/the-id a3), :channel_type "slack"}]
+-                  ;; Alert 1 gets 2 Cards (1 CSV)
+-                  PulseCard    [_ {:pulse_id (u/the-id a1), :card_id (u/the-id c)}]
+-                  PulseCard    [_ {:pulse_id (u/the-id a1), :card_id (u/the-id c), :include_csv true}]
+-                  ;; Alert 2 gets 1 Card
+-                  PulseCard    [_ {:pulse_id (u/the-id a1), :card_id (u/the-id c)}]
+-                  ;; Alert 3 gets 7 Cards (1 CSV, 2 XLS, 2 BOTH)
+-                  PulseCard    [_ {:pulse_id (u/the-id a3), :card_id (u/the-id c)}]
+-                  PulseCard    [_ {:pulse_id (u/the-id a3), :card_id (u/the-id c)}]
+-                  PulseCard    [_ {:pulse_id (u/the-id a3), :card_id (u/the-id c), :include_csv true}]
+-                  PulseCard    [_ {:pulse_id (u/the-id a3), :card_id (u/the-id c), :include_xls true}]
+-                  PulseCard    [_ {:pulse_id (u/the-id a3), :card_id (u/the-id c), :include_xls true}]
+-                  PulseCard    [_ {:pulse_id (u/the-id a3), :card_id (u/the-id c), :include_csv true, :include_xls true}]
+-                  PulseCard    [_ {:pulse_id (u/the-id a3), :card_id (u/the-id c), :include_csv true, :include_xls true}]
+-                  ;; Alert 4 gets 3 Cards
+-                  PulseCard    [_ {:pulse_id (u/the-id a3), :card_id (u/the-id c)}]
+-                  PulseCard    [_ {:pulse_id (u/the-id a3), :card_id (u/the-id c)}]
+-                  PulseCard    [_ {:pulse_id (u/the-id a3), :card_id (u/the-id c)}]]
+-    (letfn [(>= [n]
+-              (s/pred #(clojure.core/>= % n) (format ">= %s" n)))]
+-      (is (schema= {:pulses               (>= 3)
+-                    :with_table_cards     (>= 2)
+-                    :pulse_types          {(s/required-key "slack") (>= 1)
+-                                           (s/required-key "email") (>= 2)}
+-                    :pulse_schedules      {(s/required-key "daily")  (>= 2)
+-                                           (s/required-key "weekly") (>= 1)}
+-                    :num_pulses_per_user  {(s/required-key "1-5") (>= 1)
+-                                           s/Str                  s/Any}
+-                    :num_pulses_per_card  {(s/required-key "6-10") (>= 1)
+-                                           s/Str                   s/Any}
+-                    :num_cards_per_pulses {(s/required-key "1-5")  (>= 1)
+-                                           (s/required-key "6-10") (>= 1)
+-                                           s/Str                   s/Any}}
+-                   (#'metabase.analytics.stats/pulse-metrics)))
+-      (is (schema= {:alerts               (>= 4)
+-                    :with_table_cards     (>= 2)
+-                    :first_time_only      (>= 1)
+-                    :above_goal           (>= 1)
+-                    :alert_types          {(s/required-key "slack") (>= 2)
+-                                           (s/required-key "email") (>= 2)}
+-                    :num_alerts_per_user  {(s/required-key "1-5") (>= 1)
+-                                           s/Str                  s/Any}
+-                    :num_alerts_per_card  {(s/required-key "11-25") (>= 1)
+-                                           s/Str                    s/Any}
+-                    :num_cards_per_alerts {(s/required-key "1-5")  (>= 1)
+-                                           (s/required-key "6-10") (>= 1)
+-                                           s/Str                   s/Any}}
+-                   (#'metabase.analytics.stats/alert-metrics))))))
+diff --git a/test/metabase/test/initialize.clj b/test/metabase/test/initialize.clj
+index 4f9f501..7d9be87 100644
+--- a/test/metabase/test/initialize.clj
++++ b/test/metabase/test/initialize.clj
+@@ -77,8 +77,9 @@
+      ~@body))
+ 
+ (define-initialization :plugins
+-  (classloader/require 'metabase.test.initialize.plugins)
+-  ((resolve 'metabase.test.initialize.plugins/init!)))
++  (when-not *compile-files*
++    (classloader/require 'metabase.test.initialize.plugins)
++    ((resolve 'metabase.test.initialize.plugins/init!))))
+ 
+ ;; initialize test drivers that are not shipped as part of the product
+ ;; this is needed because if DRIVERS=all in the environment, then only the directories within modules are searched to
+diff --git a/test/metabase/util/ssh_test.clj b/test/metabase/util/ssh_test.clj
+deleted file mode 100644
+index 6f16a00..0000000
+--- a/test/metabase/util/ssh_test.clj
++++ /dev/null
+@@ -1,289 +0,0 @@
+-(ns metabase.util.ssh-test
+-  (:require [clojure.java.io :as io]
+-            [clojure.test :refer :all]
+-            [clojure.tools.logging :as log]
+-            [metabase.driver.sql-jdbc.connection :as sql-jdbc.conn]
+-            [metabase.models.database :refer [Database]]
+-            [metabase.query-processor :as qp]
+-            [metabase.query-processor-test :as qp.test]
+-            [metabase.sync :as sync]
+-            [metabase.test :as mt]
+-            [metabase.test.data.interface :as tx]
+-            [metabase.test.util :as tu]
+-            [metabase.util :as u]
+-            [metabase.util.ssh :as ssh])
+-  (:import [java.io BufferedReader InputStreamReader PrintWriter]
+-           [java.net InetSocketAddress ServerSocket Socket]
+-           org.apache.sshd.server.forward.AcceptAllForwardingFilter
+-           org.apache.sshd.server.SshServer
+-           org.h2.tools.Server))
+-
+-(def ^:private ssh-username "jsmith")
+-(def ^:private ssh-password "supersecret")
+-(def ^:private ssh-publickey "test_resources/ssh/ssh_test.pub")
+-(def ^:private ssh-key "test_resources/ssh/ssh_test")
+-(def ^:private ssh-key-invalid "test_resources/ssh/ssh_test_invalid")
+-(def ^:private ssh-publickey-passphrase "test_resources/ssh/ssh_test_passphrase.pub")
+-(def ^:private ssh-key-with-passphrase "test_resources/ssh/ssh_test_passphrase")
+-(def ^:private ssh-key-passphrase "Password1234")
+-(def ^:private ssh-mock-server-with-password-port 12221)
+-(def ^:private ssh-mock-server-with-publickey-port 12222)   ; ED25519 pubkey
+-(def ^:private ssh-mock-server-with-publickey-passphrase-port 12223) ; RSA pubkey
+-
+-;;--------------
+-;; mock ssh server fixtures
+-;;--------------
+-
+-(defn- start-ssh-mock-server-with-password!
+-  "start a ssh mock server with password auth challenge"
+-  []
+-  (try
+-    (let [password-auth    (reify org.apache.sshd.server.auth.password.PasswordAuthenticator
+-                             (authenticate [_ username password _session]
+-                               (and
+-                                (= username ssh-username)
+-                                (= password ssh-password))))
+-          keypair-provider (org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider.)
+-          sshd             (doto (SshServer/setUpDefaultServer)
+-                             (.setPort ssh-mock-server-with-password-port)
+-                             (.setKeyPairProvider keypair-provider)
+-                             (.setPasswordAuthenticator password-auth)
+-                             (.setForwardingFilter AcceptAllForwardingFilter/INSTANCE)
+-                             .start)]
+-      (log/debug "ssh mock server (with password) started")
+-      sshd)
+-    (catch Throwable e
+-      (throw (ex-info (format "Error starting SSH mock server with password on port %d" ssh-mock-server-with-password-port)
+-                      {:port ssh-mock-server-with-password-port}
+-                      e)))))
+-
+-(defn- start-ssh-mock-server-with-public-key!
+-  "start a ssh mock server with public key auth challenge"
+-  [pubkey port]
+-  (try
+-    (let [keypair-provider (new org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider)
+-          publickey-file   (io/file pubkey)
+-          publickey-auth   (org.apache.sshd.server.config.keys.AuthorizedKeysAuthenticator. (.toPath publickey-file))
+-          sshd             (doto (SshServer/setUpDefaultServer)
+-                             (.setPort port)
+-                             (.setKeyPairProvider keypair-provider)
+-                             (.setPublickeyAuthenticator publickey-auth)
+-                             (.setForwardingFilter AcceptAllForwardingFilter/INSTANCE)
+-                             .start)]
+-      (log/debug "ssh mock server (with publickey) started")
+-      sshd)
+-    (catch Throwable e
+-      (throw (ex-info (format "Error starting SSH mock server with public key on port %d" port)
+-                      {:port port}
+-                      e)))))
+-
+-(defonce ^:private servers* (atom nil))
+-
+-(defn- stop-mock-servers! []
+-  (doseq [^SshServer server @servers*]
+-    (try
+-      (log/debugf "Stop mock server %s" server)
+-      (.stop server)
+-      (catch Exception e
+-        (log/error e "Error stopping mock server"))))
+-  (reset! servers* nil))
+-
+-(defn- start-mock-servers! []
+-  (try
+-    (doseq [start-server! [start-ssh-mock-server-with-password!
+-                           #(start-ssh-mock-server-with-public-key!
+-                             ssh-publickey ssh-mock-server-with-publickey-port)
+-                           #(start-ssh-mock-server-with-public-key!
+-                             ssh-publickey-passphrase ssh-mock-server-with-publickey-passphrase-port)]]
+-      (let [server (start-server!)]
+-        (log/debugf "Started mock server %s" server)
+-        (swap! servers* conj server)))
+-    (catch Throwable e
+-      (log/error e "Error starting servers")
+-      (throw (ex-info "Error starting mock server" {} e)))))
+-
+-(defn- do-with-mock-servers [thunk]
+-  (try
+-    (stop-mock-servers!)
+-    (start-mock-servers!)
+-    (thunk)
+-    (finally
+-      (stop-mock-servers!))))
+-
+-(use-fixtures :once do-with-mock-servers)
+-
+-;;--------------
+-;; tests
+-;;--------------
+-
+-;; correct password
+-(deftest connects-with-correct-password
+-  (ssh/start-ssh-tunnel!
+-   {:tunnel-user ssh-username
+-    :tunnel-host "127.0.0.1"
+-    :tunnel-port ssh-mock-server-with-password-port
+-    :tunnel-pass ssh-password
+-    :host        "127.0.0.1"
+-    :port        1234}))
+-
+-;; incorrect password
+-(deftest throws-exception-on-incorrect-password
+-  (is (thrown?
+-       org.apache.sshd.common.SshException
+-       (ssh/start-ssh-tunnel!
+-        {:tunnel-user ssh-username
+-         :tunnel-host "127.0.0.1"
+-         :tunnel-port ssh-mock-server-with-password-port
+-         :tunnel-pass (str ssh-password "invalid")
+-         :host        "127.0.0.1"
+-         :port        1234}))))
+-
+-;; correct ssh key
+-(deftest connects-with-correct-ssh-key
+-  (is (some?
+-       (ssh/start-ssh-tunnel!
+-        {:tunnel-user        ssh-username
+-         :tunnel-host        "127.0.0.1"
+-         :tunnel-port        ssh-mock-server-with-publickey-port
+-         :tunnel-private-key (slurp ssh-key)
+-         :host               "127.0.0.1"
+-         :port               1234}))))
+-
+-;; incorrect ssh key
+-(deftest throws-exception-on-incorrect-ssh-key
+-  (is (thrown?
+-       org.apache.sshd.common.SshException
+-       (ssh/start-ssh-tunnel!
+-        {:tunnel-user        ssh-username
+-         :tunnel-host        "127.0.0.1"
+-         :tunnel-port        ssh-mock-server-with-publickey-port
+-         :tunnel-private-key (slurp ssh-key-invalid)
+-         :host               "127.0.0.1"
+-         :port               1234}))))
+-
+-;; correct ssh key
+-(deftest connects-with-correct-ssh-key-and-passphrase
+-  (is (some?
+-       (ssh/start-ssh-tunnel!
+-        {:tunnel-user                   ssh-username
+-         :tunnel-host                   "127.0.0.1"
+-         :tunnel-port                   ssh-mock-server-with-publickey-passphrase-port
+-         :tunnel-private-key            (slurp ssh-key-with-passphrase)
+-         :tunnel-private-key-passphrase ssh-key-passphrase
+-         :host                          "127.0.0.1"
+-         :port                          1234}))))
+-
+-(deftest throws-exception-on-incorrect-ssh-key-and-passphrase
+-  (is (thrown?
+-       java.io.StreamCorruptedException
+-       (ssh/start-ssh-tunnel!
+-        {:tunnel-user                   ssh-username
+-         :tunnel-host                   "127.0.0.1"
+-         :tunnel-port                   ssh-mock-server-with-publickey-passphrase-port
+-         :tunnel-private-key            (slurp ssh-key-with-passphrase)
+-         :tunnel-private-key-passphrase "this-is-the-wrong-passphrase"
+-         :host                          "127.0.0.1"
+-         :port                          1234}))))
+-
+-(deftest ssh-tunnel-works
+-  (testing "ssh tunnel can properly tunnel"
+-    (with-open [server (doto (ServerSocket. 0) ; 0 -- let ServerSocket pick a random port
+-                         (.setSoTimeout 10000))
+-                socket (Socket.)]
+-      (let [port          (.getLocalPort server)
+-            server-thread (future (with-open [client-socket (.accept server)
+-                                              out-server    (PrintWriter. (.getOutputStream client-socket) true)]
+-                                    (.println out-server "hello from the ssh tunnel")))]
+-        ;; this will try to open a TCP connection via the tunnel.
+-        (ssh/with-ssh-tunnel [details-with-tunnel {:tunnel-enabled                true
+-                                                   :tunnel-user                   ssh-username
+-                                                   :tunnel-host                   "127.0.0.1"
+-                                                   :tunnel-port                   ssh-mock-server-with-publickey-passphrase-port
+-                                                   :tunnel-private-key            (slurp ssh-key-with-passphrase)
+-                                                   :tunnel-private-key-passphrase ssh-key-passphrase
+-                                                   :host                          "127.0.0.1"
+-                                                   :port                          port}]
+-          (.connect socket (InetSocketAddress. "127.0.0.1" ^Integer (:tunnel-entrance-port details-with-tunnel)) 3000)
+-          ;; cause our future to run to completion
+-          (u/deref-with-timeout server-thread 12000)
+-          (with-open [in-client (BufferedReader. (InputStreamReader. (.getInputStream socket)))]
+-            (is (= "hello from the ssh tunnel" (.readLine in-client)))))))))
+-
+-(defn- init-h2-tcp-server [port]
+-  (let [args   ["-tcp" "-tcpPort", (str port), "-tcpAllowOthers" "-tcpDaemon"]
+-        server (Server/createTcpServer (into-array args))]
+-    (doto server (.start))))
+-
+-(deftest test-ssh-tunnel-reconnection
+-  ;; for now, run against Postgres, although in theory it could run against many different kinds
+-  (mt/test-drivers #{:postgres :mysql}
+-    (testing "ssh tunnel is reestablished if it becomes closed, so subsequent queries still succeed"
+-      (let [tunnel-db-details (assoc (:details (mt/db))
+-                                     :tunnel-enabled true
+-                                     :tunnel-host "localhost"
+-                                     :tunnel-auth-option "password"
+-                                     :tunnel-port ssh-mock-server-with-password-port
+-                                     :tunnel-user ssh-username
+-                                     :tunnel-pass ssh-password)]
+-        (mt/with-temp Database [tunneled-db {:engine (tx/driver), :details tunnel-db-details}]
+-          (mt/with-db tunneled-db
+-            (sync/sync-database! (mt/db))
+-            (letfn [(check-row []
+-                      (is (= [["Polo Lounge"]]
+-                             (mt/rows (mt/run-mbql-query venues {:filter [:= $id 60] :fields [$name]})))))]
+-              ;; check that some data can be queried
+-              (check-row)
+-              ;; kill the ssh tunnel; fortunately, we have an existing function that can do that
+-              (ssh/close-tunnel! (sql-jdbc.conn/db->pooled-connection-spec (mt/db)))
+-              ;; check the query again; the tunnel should have been reestablished
+-              (check-row))))))))
+-
+-(deftest test-ssh-tunnel-reconnection-h2
+-  (testing (str "We need a customized version of this test for H2. It will bring up a new H2 TCP server, pointing to "
+-                "an existing DB file (stored in source control, called 'tiny-db', with a single table called 'my_tbl' "
+-                "and a GUEST user with password 'guest'); it will then use an SSH tunnel over localhost to connect to "
+-                "this H2 server's TCP port to execute native queries against that table.")
+-    (mt/with-driver :h2
+-      (testing "ssh tunnel is reestablished if it becomes closed, so subsequent queries still succeed (H2 version)"
+-        (let [h2-port (tu/find-free-port)
+-              server  (init-h2-tcp-server h2-port)
+-              uri     (format "tcp://localhost:%d/./test_resources/ssh/tiny-db;USER=GUEST;PASSWORD=guest" h2-port)
+-              h2-db   {:port               h2-port
+-                       :host               "localhost"
+-                       :db                 uri
+-                       :tunnel-enabled     true
+-                       :tunnel-host        "localhost"
+-                       :tunnel-auth-option "password"
+-                       :tunnel-port        ssh-mock-server-with-password-port
+-                       :tunnel-user        ssh-username
+-                       :tunnel-pass        ssh-password}]
+-          (try
+-            (mt/with-temp Database [db {:engine :h2, :details h2-db}]
+-              (mt/with-db db
+-                (sync/sync-database! db)
+-                (letfn [(check-data [] (is (= {:cols [{:base_type    :type/Text
+-                                                       :effective_type :type/Text
+-                                                       :display_name "COL1"
+-                                                       :field_ref    [:field "COL1" {:base-type :type/Text}]
+-                                                       :name         "COL1"
+-                                                       :source       :native}
+-                                                      {:base_type    :type/Decimal
+-                                                       :effective_type :type/Decimal
+-                                                       :display_name "COL2"
+-                                                       :field_ref    [:field "COL2" {:base-type :type/Decimal}]
+-                                                       :name         "COL2"
+-                                                       :source       :native}]
+-                                               :rows [["First Row"  19.10M]
+-                                                      ["Second Row" 100.40M]
+-                                                      ["Third Row"  91884.10M]]}
+-                                              (-> {:query "SELECT col1, col2 FROM my_tbl;"}
+-                                                  (mt/native-query)
+-                                                  (qp/process-query)
+-                                                  (qp.test/rows-and-cols)))))]
+-                  ;; check that some data can be queried
+-                  (check-data)
+-                  ;; kill the ssh tunnel; fortunately, we have an existing function that can do that
+-                  (ssh/close-tunnel! (sql-jdbc.conn/db->pooled-connection-spec db))
+-                  ;; check the query again; the tunnel should have been reestablished
+-                  (check-data))))
+-            (finally (.stop ^Server server))))))))
