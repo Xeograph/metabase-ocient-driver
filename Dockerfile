@@ -90,6 +90,9 @@ COPY --from=stg_driver_build /build/metabase/resources/modules/ocient.metabase-d
 ######################
 FROM stg_base as stg_test_tarball
 
+ARG METABASE_VERSION
+ARG METABASE_OCIENT_VERSION
+
 COPY test/ /build/metabase/modules/drivers/ocient/test
 COPY patches/test-tarball.patch /build/
 RUN git apply /build/test-tarball.patch
@@ -103,6 +106,7 @@ WORKDIR /build
 # Place uberjar and remaining deps in a tarball
 RUN mv metabase/target/uberjar/metabase.jar metabase/ \
     && mv metabase metabase_test \
+    && echo "{\"time\": \"$(date -u +"%Y-%m-%dT%T")\", \"metabase_version\": \"${METABASE_VERSION}\", \"metabase_ocient_version\": \"${METABASE_OCIENT_VERSION}\"}" > metabase_test/build_info.json \
     && tar rvf metabase_test/target/metabase_test.tar metabase_test/metabase.jar \
     && tar rvf metabase_test/target/metabase_test.tar metabase_test/test_modules/drivers/secret-test-driver/resources/metabase-plugin.yaml \
     && tar rvf metabase_test/target/metabase_test.tar metabase_test/test_modules/drivers/driver-deprecation-test-new/resources/metabase-plugin.yaml \
