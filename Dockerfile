@@ -98,25 +98,28 @@ RUN git apply /build/test-tarball.patch
 RUN --mount=type=cache,target=/root/.m2/repository \ 
     clojure -T:dev:build uberjar
 
+WORKDIR /build
+
 # Place uberjar and remaining deps in a tarball
-RUN mv target/uberjar/metabase.jar . \
-    && tar rvf target/metabase_test.tar ./metabase.jar \
-    && tar rvf target/metabase_test.tar ./test_modules/drivers/secret-test-driver/resources/metabase-plugin.yaml \
-    && tar rvf target/metabase_test.tar ./test_modules/drivers/driver-deprecation-test-new/resources/metabase-plugin.yaml \
-    && tar rvf target/metabase_test.tar ./test_modules/drivers/driver-deprecation-test-legacy/resources/metabase-plugin.yaml \
-    && tar rvf target/metabase_test.tar ./README.md \
-    && tar rvf target/metabase_test.tar ./frontend/test/__runner__/test_db_fixture.db.mv.db \
-    && tar rvf target/metabase_test.tar ./frontend/test/__runner__/empty.db.mv.db \
-    && tar rvf target/metabase_test.tar ./test_resources/* \
-    && tar rvf target/metabase_test.tar ./test/metabase/test/data/dataset_definitions/*.edn \
-    && gzip target/metabase_test.tar
+RUN mv metabase/target/uberjar/metabase.jar metabase/ \
+    && mv metabase metabase_test \
+    && tar rvf metabase_test/target/metabase_test.tar metabase_test/metabase.jar \
+    && tar rvf metabase_test/target/metabase_test.tar metabase_test/test_modules/drivers/secret-test-driver/resources/metabase-plugin.yaml \
+    && tar rvf metabase_test/target/metabase_test.tar metabase_test/test_modules/drivers/driver-deprecation-test-new/resources/metabase-plugin.yaml \
+    && tar rvf metabase_test/target/metabase_test.tar metabase_test/test_modules/drivers/driver-deprecation-test-legacy/resources/metabase-plugin.yaml \
+    && tar rvf metabase_test/target/metabase_test.tar metabase_test/README.md \
+    && tar rvf metabase_test/target/metabase_test.tar metabase_test/frontend/test/__runner__/test_db_fixture.db.mv.db \
+    && tar rvf metabase_test/target/metabase_test.tar metabase_test/frontend/test/__runner__/empty.db.mv.db \
+    && tar rvf metabase_test/target/metabase_test.tar metabase_test/test_resources/* \
+    && tar rvf metabase_test/target/metabase_test.tar metabase_test/test/metabase/test/data/dataset_definitions/*.edn \
+    && gzip metabase_test/target/metabase_test.tar
 
 
 #############################
 # Test Tarball Export stage #
 #############################
 FROM scratch as stg_test_tarball_export
-COPY --from=stg_test_tarball /build/metabase/target/metabase_test.tar.gz /
+COPY --from=stg_test_tarball /build/metabase_test/target/metabase_test.tar.gz /
 
 
 ################
