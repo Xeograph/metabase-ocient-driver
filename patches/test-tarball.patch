@@ -106,6 +106,18 @@ index 4e2f602..e1fc813 100644
     :ns-default build}
  
  ;;; Other misc convenience aliases
+diff --git a/modules/drivers/deps.edn b/modules/drivers/deps.edn
+index 9881084..07cc55c 100644
+--- a/modules/drivers/deps.edn
++++ b/modules/drivers/deps.edn
+@@ -3,6 +3,7 @@
+   metabase/druid              {:local/root "druid"}
+   metabase/googleanalytics    {:local/root "googleanalytics"}
+   metabase/mongo              {:local/root "mongo"}
++  metabase/ocient             {:local/root "ocient"}
+   metabase/oracle             {:local/root "oracle"}
+   metabase/presto             {:local/root "presto"}
+   metabase/presto-common      {:local/root "presto-common"}
 diff --git a/src/metabase/core.clj b/src/metabase/core.clj
 index 92df5cf..a9e6a09 100644
 --- a/src/metabase/core.clj
