@@ -1,5 +1,7 @@
 (ns metabase.driver.ocient-test
-  (:require [clojure.test :refer [:deftest :is :testing]]
+  (:require [clojure.test :refer :all]
+            [metabase.models.database :refer [Database]]
+            [metabase.models.field :refer [Field]]
             [metabase.sync :as sync]
             [metabase.test :as mt]
             [metabase.test.data.interface :as tx]

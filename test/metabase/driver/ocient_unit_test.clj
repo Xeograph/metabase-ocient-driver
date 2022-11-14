@@ -1,5 +1,5 @@
 (ns metabase.driver.ocient-unit-test
-  (:require [clojure.test :refer [:deftest :is :testing]]
+  (:require [clojure.test :refer :all]
             [metabase.driver.sql-jdbc.connection :as sql-jdbc.conn]
             [metabase.test :as mt]
             [metabase.test.data.sql.ddl :as ddl]
