@@ -48,7 +48,7 @@
 (defn- execute-sql-spec!
   [spec sql & {:keys [execute!]
                :or   {execute! jdbc/execute!}}]
-  (log/tracef (format "[ocient-execute-sql] %s" (pr-str sql)))
+  (log/debugf (format "[ocient-execute-sql] %s" (pr-str sql)))
   (let [sql (some-> sql str/trim)]
     (try
       (execute! spec sql)
@@ -170,11 +170,11 @@
 
 (def ^:private db-connection-details
   (delay
-   {:host     (tx/db-test-env-var :ocient :host "tableau-sim.corp.ocient.com")
-    :port     (tx/db-test-env-var :ocient :port "7050")
-    :user     (tx/db-test-env-var :ocient :user "admin@system")
-    :password (tx/db-test-env-var :ocient :password "admin")
-    :additional-options "loglevel=TRACE;logfile=/tmp/ocient_jdbc.log;statementPooling=OFF;force=true"}))
+    {:host     (tx/db-test-env-var :ocient :host "tableau-sim.corp.ocient.com")
+     :port     (tx/db-test-env-var :ocient :port "7050")
+     :user     (tx/db-test-env-var :ocient :user "admin@system")
+     :password (tx/db-test-env-var :ocient :password "admin")
+     :additional-options "loglevel=TRACE;logfile=/tmp/ocient_jdbc.log;statementPooling=OFF;force=true"}))
 
 (defmethod tx/dbdef->connection-details :ocient
   [driver context {:keys [database-name]}]
@@ -282,7 +282,12 @@
 
 (defn- fks-table-name
   [table-name]
-  (str table-name \- fks-table-name-suffix))
+  (apply str
+         ;; only the last 30 characters from the qualified table name are taken. 
+         ;;
+         ;; Don't kill me, I'm just the messenger... 
+         ;; https://github.com/metabase/metabase/blob/v0.44.4/test/metabase/test/data/interface.clj#L195-L209
+         (take-last 30 (str table-name \- fks-table-name-suffix))))
 
 (defn- qualified-fks-table
   [database-name table-name]
@@ -427,10 +432,9 @@
 (defn- describe-table-fks*
   [^Connection conn {^String table-name :name}]
   (when (not (str/ends-with? table-name fks-table-name-suffix))
-    (let [fks-table-name (str/join "-" [table-name fks-table-name-suffix])
-          [sql & params] (hsql/format {:select [[(keyword fks-table-field-name) (keyword fks-table-field-name)]
+    (let [[sql & params] (hsql/format {:select [[(keyword fks-table-field-name) (keyword fks-table-field-name)]
                                                 [(keyword fks-table-dest-table-name) (keyword fks-table-dest-table-name)]]
-                                       :from   [(keyword (str session-schema \. (ddl.i/format-name :ocient fks-table-name)))]}
+                                       :from   [(keyword (str fks-schema \. (ddl.i/format-name :ocient (fks-table-name table-name))))]}
                                       nil)]
       (.setSchema conn fks-schema)
       (with-open [stmt (sql-jdbc.execute/prepared-statement :ocient conn sql params)]
@@ -449,8 +453,8 @@
 (defmethod driver/describe-table-fks :ocient
   [_ db-or-id-or-spec-or-conn table & _]
   ;; Return an empty sequence for the FKs tables themselves
-    (if (instance? Connection db-or-id-or-spec-or-conn)
-      (describe-table-fks* db-or-id-or-spec-or-conn table)
-      (let [spec (sql-jdbc.conn/db->pooled-connection-spec db-or-id-or-spec-or-conn)]
-        (with-open [conn (jdbc/get-connection spec)]
-          (describe-table-fks* conn table)))))
+  (if (instance? Connection db-or-id-or-spec-or-conn)
+    (describe-table-fks* db-or-id-or-spec-or-conn table)
+    (let [spec (sql-jdbc.conn/db->pooled-connection-spec db-or-id-or-spec-or-conn)]
+      (with-open [conn (jdbc/get-connection spec)]
+        (describe-table-fks* conn table)))))
