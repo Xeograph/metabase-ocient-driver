@@ -120,9 +120,9 @@ ARG TARBALL_NAME=metabase_test_${METABASE_TEST_TARBALL_VERSION}
 
 WORKDIR /build
 
-# Place uberjar and remaining deps in a tarball
+# Place uberjar and remaining deps in a directory named "metabase_test" and tarball it
 RUN mv metabase/target/uberjar/metabase.jar metabase/ \
-    && mv metabase ${TARBALL_NAME} \
+    && mv metabase metabase_test \
     && echo "{"\
             "\"time\": \"$(date -u +"%Y-%m-%dT%T")\""\
             ", \"git_sha\": \"${GIT_SHA}\""\
@@ -132,18 +132,18 @@ RUN mv metabase/target/uberjar/metabase.jar metabase/ \
             ", \"metabase_version\": \"${METABASE_VERSION}\""\
             ", \"metabase_ocient_version\": \"${METABASE_OCIENT_VERSION}\""\
             ", \"metabase_test_tarball_version\": \"${METABASE_TEST_TARBALL_VERSION}\""\
-            "}" > ${TARBALL_NAME}/build_info.json \
-    && tar rvf ${TARBALL_NAME}/target/${TARBALL_NAME}.tar ${TARBALL_NAME}/build_info.json \
-    && tar rvf ${TARBALL_NAME}/target/${TARBALL_NAME}.tar ${TARBALL_NAME}/metabase.jar \
-    && tar rvf ${TARBALL_NAME}/target/${TARBALL_NAME}.tar ${TARBALL_NAME}/test_modules/drivers/secret-test-driver/resources/metabase-plugin.yaml \
-    && tar rvf ${TARBALL_NAME}/target/${TARBALL_NAME}.tar ${TARBALL_NAME}/test_modules/drivers/driver-deprecation-test-new/resources/metabase-plugin.yaml \
-    && tar rvf ${TARBALL_NAME}/target/${TARBALL_NAME}.tar ${TARBALL_NAME}/test_modules/drivers/driver-deprecation-test-legacy/resources/metabase-plugin.yaml \
-    && tar rvf ${TARBALL_NAME}/target/${TARBALL_NAME}.tar ${TARBALL_NAME}/README.md \
-    && tar rvf ${TARBALL_NAME}/target/${TARBALL_NAME}.tar ${TARBALL_NAME}/frontend/test/__runner__/test_db_fixture.db.mv.db \
-    && tar rvf ${TARBALL_NAME}/target/${TARBALL_NAME}.tar ${TARBALL_NAME}/frontend/test/__runner__/empty.db.mv.db \
-    && tar rvf ${TARBALL_NAME}/target/${TARBALL_NAME}.tar ${TARBALL_NAME}/test_resources/* \
-    && tar rvf ${TARBALL_NAME}/target/${TARBALL_NAME}.tar ${TARBALL_NAME}/test/metabase/test/data/dataset_definitions/*.edn \
-    && gzip ${TARBALL_NAME}/target/${TARBALL_NAME}.tar
+            "}" > metabase_test/build_info.json \
+    && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/build_info.json \
+    && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/metabase.jar \
+    && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/test_modules/drivers/secret-test-driver/resources/metabase-plugin.yaml \
+    && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/test_modules/drivers/driver-deprecation-test-new/resources/metabase-plugin.yaml \
+    && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/test_modules/drivers/driver-deprecation-test-legacy/resources/metabase-plugin.yaml \
+    && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/README.md \
+    && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/frontend/test/__runner__/test_db_fixture.db.mv.db \
+    && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/frontend/test/__runner__/empty.db.mv.db \
+    && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/test_resources/* \
+    && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/test/metabase/test/data/dataset_definitions/*.edn \
+    && gzip metabase_test/target/${TARBALL_NAME}.tar
 
 
 #############################
@@ -154,7 +154,7 @@ FROM scratch as stg_test_tarball_export
 ARG METABASE_TEST_TARBALL_VERSION
 ARG TARBALL_NAME=metabase_test_${METABASE_TEST_TARBALL_VERSION}
 
-COPY --from=stg_test_tarball  /build/${TARBALL_NAME}/target/${TARBALL_NAME}.tar.gz /
+COPY --from=stg_test_tarball  /build/metabase_test/target/${TARBALL_NAME}.tar.gz /
 
 
 ################
