@@ -10,8 +10,7 @@ Use the [`Dockerfile`](./Dockerfile) to build the Ocient diver and run the most 
 ```shell
 git clone git@github.com:Xeograph/metabase-ocient-driver.git
 cd metabase-ocient-driver
-DOCKER_BUILDKIT=1 docker build -t metabase/ocient .
-docker run --name metabase-ocient -p 3000:3000 metabase/ocient
+make run
 ```
 
 ### Use custom Metabase JAR
@@ -37,7 +36,6 @@ The entire Metabase JAR, including the Ocient driver, can be built using the pro
 Build the image and copy the jar from the export stage.
 
 ```shell
-docker build --output jars --target stg_driver_export .
+# Outputs jar to `target/ocient.metabase-driver.jar` 
+make driver
 ```
-
-The `ocient.metabase-driver.jar` file will be placed in the `jars/` directory.

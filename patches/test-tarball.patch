@@ -27,25 +27,26 @@ index 68ed0c9..2163108 100644
                          :src-dirs   paths
                          :class-dir  class-dir
 diff --git a/deps.edn b/deps.edn
-index 4e2f602..e1fc813 100644
+index 4e2f602..4d6469e 100644
 --- a/deps.edn
 +++ b/deps.edn
-@@ -154,7 +154,7 @@
+@@ -152,9 +152,8 @@
+  ;; !!                            *PLEASE DO NOT* ADD NEW ONES TO THE BOTTOM OF THE LIST.                            !!
+  ;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  
- 
+-
   :paths
 - ["src" "shared/src" "resources"]
 + ["src" "test" "shared/src" "resources" "dev/src" "local/src" "shared/test" "test_resources" "test_config"]
  
   :aliases
   {
-@@ -222,9 +222,19 @@
+@@ -222,9 +221,18 @@
    ;; clojure -M:run:ee (include EE code)
    :run
    {:main-opts ["-m" "metabase.core"]
 -   :jvm-opts  ["-Dmb.run.mode=dev"
-+   :extra-deps {clj-http-fake/clj-http-fake                           {:mvn/version "1.0.3"}
-+                eftest/eftest                                         {:mvn/version "0.5.9"}
++   :extra-deps {eftest/eftest                                         {:mvn/version "0.5.9"}
 +                pjstadig/humane-test-output                           {:mvn/version "0.11.0"}}
 +   :source-paths ["test" "src"  "shared/src" "resources"  "dev/src" "local/src" "shared/test" "test_resources" "test_config"]
 +
@@ -61,7 +62,7 @@ index 4e2f602..e1fc813 100644
  
    ;; alias for CI-specific options.
    :ci
-@@ -244,7 +254,22 @@
+@@ -244,7 +252,22 @@
  
    ;; these aliases exist for symmetry with the ee aliases. Empty for now.
    :oss
@@ -85,15 +86,7 @@ index 4e2f602..e1fc813 100644
  
    :oss-dev
    {}
-@@ -268,6 +293,7 @@
-     "modules/drivers/druid/test"
-     "modules/drivers/googleanalytics/test"
-     "modules/drivers/mongo/test"
-+    "modules/drivers/ocient/test"
-     "modules/drivers/oracle/test"
-     "modules/drivers/presto/test"
-     "modules/drivers/presto-common/test"
-@@ -403,7 +429,11 @@
+@@ -403,7 +426,11 @@
    {:deps       {io.github.clojure/tools.build   {:git/tag "v0.7.5" :git/sha "2526f58"}
                  com.github.seancorfield/depstar {:mvn/version "2.1.303"}
                  metabase/build.common           {:local/root "bin/common"}
@@ -106,18 +99,6 @@ index 4e2f602..e1fc813 100644
     :ns-default build}
  
  ;;; Other misc convenience aliases
-diff --git a/modules/drivers/deps.edn b/modules/drivers/deps.edn
-index 9881084..07cc55c 100644
---- a/modules/drivers/deps.edn
-+++ b/modules/drivers/deps.edn
-@@ -3,6 +3,7 @@
-   metabase/druid              {:local/root "druid"}
-   metabase/googleanalytics    {:local/root "googleanalytics"}
-   metabase/mongo              {:local/root "mongo"}
-+  metabase/ocient             {:local/root "ocient"}
-   metabase/oracle             {:local/root "oracle"}
-   metabase/presto             {:local/root "presto"}
-   metabase/presto-common      {:local/root "presto-common"}
 diff --git a/src/metabase/core.clj b/src/metabase/core.clj
 index 92df5cf..a9e6a09 100644
 --- a/src/metabase/core.clj
@@ -575,3 +556,23 @@ index 6f16a00..0000000
 -                  ;; check the query again; the tunnel should have been reestablished
 -                  (check-data))))
 -            (finally (.stop ^Server server))))))))
+diff --git a/test_config/log4j2-test.xml b/test_config/log4j2-test.xml
+index fbb6f45..023acf2 100644
+--- a/test_config/log4j2-test.xml
++++ b/test_config/log4j2-test.xml
+@@ -6,11 +6,11 @@
+     </Console>
+   </Appenders>
+   <Loggers>
+-    <Logger name="metabase" level="FATAL"/>
+-    <Logger name="metabase-enterprise" level="FATAL"/>
+-    <Logger name="liquibase" level="FATAL"/>
++    <Logger name="metabase" level="DEBUG"/>
++    <Logger name="metabase-enterprise" level="DEBUG"/>
++    <Logger name="liquibase" level="DEBUG"/>
+ 
+-    <Root level="ERROR">
++    <Root level="DEBUG">
+       <AppenderRef ref="Console"/>
+     </Root>
+   </Loggers>
