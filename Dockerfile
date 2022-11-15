@@ -131,8 +131,9 @@ RUN mv metabase/target/uberjar/metabase.jar metabase/ \
             ", \"git_dirty\": \"${GIT_DIRTY}\""\
             ", \"metabase_version\": \"${METABASE_VERSION}\""\
             ", \"metabase_ocient_version\": \"${METABASE_OCIENT_VERSION}\""\
-            ", \"metabase_test_tarball_version\": \"${METABASE_TEST_TARBALL_VERSION}}\""\
+            ", \"metabase_test_tarball_version\": \"${METABASE_TEST_TARBALL_VERSION}\""\
             "}" > ${TARBALL_NAME}/build_info.json \
+    && tar rvf ${TARBALL_NAME}/target/${TARBALL_NAME}.tar ${TARBALL_NAME}/build_info.json \
     && tar rvf ${TARBALL_NAME}/target/${TARBALL_NAME}.tar ${TARBALL_NAME}/metabase.jar \
     && tar rvf ${TARBALL_NAME}/target/${TARBALL_NAME}.tar ${TARBALL_NAME}/test_modules/drivers/secret-test-driver/resources/metabase-plugin.yaml \
     && tar rvf ${TARBALL_NAME}/target/${TARBALL_NAME}.tar ${TARBALL_NAME}/test_modules/drivers/driver-deprecation-test-new/resources/metabase-plugin.yaml \
