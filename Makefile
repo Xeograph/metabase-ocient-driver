@@ -1,3 +1,5 @@
+.SILENT: driver-version test-tarball-version metabase-version
+
 # Latest commit hash
 GIT_SHA=$(shell git rev-parse HEAD)
 GIT_DIRTY=$(shell (git diff -s --exit-code && echo 0) || echo 1)
@@ -36,16 +38,51 @@ test-tarball:
 		 -t metabase_test_tarball:$(METABASE_TEST_TARBALL_VERSION) \
 		.
 
+# Build the Metabase container
 build:
 	DOCKER_BUILDKIT=1 docker build \
 		-t metabase_ocient:$(METABASE_VERSION) \
 		.
 
+# Create and start the Metabase container
 run: build
 	DOCKER_BUILDKIT=1 docker run \
 		--name metabase_ocient_$(METABASE_VERSION) \
-		--rm \
 		-d \
 		-p 3000:3000 \
 		metabase_ocient:$(METABASE_VERSION)
 
+# Start the Metabase container
+start:
+	docker start metabase_ocient_$(METABASE_VERSION)
+
+# Stop the Metabase container
+stop:
+	docker stop metabase_ocient_$(METABASE_VERSION)
+
+# Delete the Metabase container
+rm:
+	docker rm metabase_ocient_$(METABASE_VERSION)
+
+clean:
+	rm -rf target
+	docker stop metabase_ocient_$(METABASE_VERSION) || true
+	docker rm metabase_ocient_$(METABASE_VERSION) || true
+
+# Rebuild the driver and update the running metabase instance
+update: driver
+	docker cp target/ocient.metabase-driver.jar metabase_ocient_$(METABASE_VERSION):/plugins/
+	docker restart metabase_ocient_$(METABASE_VERSION)
+	docker restart metabase_ocient_$(METABASE_VERSION)
+
+# Output the Ocient driver version
+driver-version:
+	echo $(METABASE_OCIENT_VERSION)
+
+# Output the test archive
+test-tarball-version:
+	echo $(METABASE_TEST_TARBALL_VERSION)
+
+# Output Metabase version
+metabase-version:
+	echo $(METABASE_VERSION)
