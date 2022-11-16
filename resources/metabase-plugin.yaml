@@ -1,7 +1,7 @@
 # Complete list of options here: https://github.com/metabase/metabase/wiki/Metabase-Plugin-Manifest-Reference
 info:
   name: Metabase Ocient Driver
-  version: v0.1.0-rc.1
+  version: v0.1.0-rc.2
   description: Allows Metabase to connect to Ocient databases.
 
 driver:
@@ -24,6 +24,11 @@ driver:
           placeholder: DATABASE NAME
     - user
     - password
+    - advanced-options-start
+    - merge:
+        - additional-options
+        - display-name: Additional connection string options (optional)
+    - default-advanced-options
   connection-properties-include-tunnel-config: false
 init:
   - step: load-namespace
