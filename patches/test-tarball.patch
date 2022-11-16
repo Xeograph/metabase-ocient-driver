@@ -245,6 +245,62 @@ index 66111a0..92afe6b 100644
 -                                           (s/required-key "6-10") (>= 1)
 -                                           s/Str                   s/Any}}
 -                   (#'metabase.analytics.stats/alert-metrics))))))
+diff --git a/test/metabase/test/data.clj b/test/metabase/test/data.clj
+index c985e94..8772cb8 100644
+--- a/test/metabase/test/data.clj
++++ b/test/metabase/test/data.clj
+@@ -33,7 +33,8 @@
+       ;; -> {:source-table (data/id :venues), :fields [(data/id :venues :name)]}
+ 
+      (There are several variations of this macro; see documentation below for more details.)"
+-  (:require [clojure.test :as t]
++  (:require [clojure.string :as str]
++            [clojure.test :as t]
+             [colorize.core :as colorize]
+             [metabase.driver.ddl.interface :as ddl.i]
+             [metabase.query-processor :as qp]
+@@ -202,6 +203,12 @@
+   ([table-name field-name & nested-field-names]
+    (apply data.impl/the-field-id (id table-name) (map format-name (cons field-name nested-field-names)))))
+ 
++
++(def dataset-blacklist
++  (set (map symbol (str/split
++                    (tx/db-test-env-var :ocient :dataset-blacklist "")
++                    ","))))
++
+ (defmacro dataset
+   "Create a database and load it with the data defined by `dataset`, then do a quick metadata-only sync; make it the
+   current DB (for [[metabase.test.data]] functions like [[id]] and [[db]]), and execute `body`.
+@@ -227,15 +234,19 @@
+      (data/dataset (get-dataset-definition) ...)"
+   {:style/indent 1}
+   [dataset & body]
+-  `(t/testing (colorize/magenta ~(str (if (symbol? dataset)
+-                                        (format "using %s dataset" dataset)
+-                                        "using inline dataset")
+-                                      \newline))
+-     (data.impl/do-with-dataset ~(if (and (symbol? dataset)
+-                                          (not (get &env dataset)))
+-                                   `(data.impl/resolve-dataset-definition '~(ns-name *ns*) '~dataset)
+-                                   dataset)
+-                                (fn [] ~@body))))
++  `(if (and 
++        (symbol? dataset) 
++        (contains? dataset-blacklist dataset))
++     (constantly 0) ;; Just skip the test
++     (t/testing (colorize/magenta ~(str (if (symbol? dataset)
++                                          (format "using %s dataset" dataset)
++                                          "using inline dataset")
++                                        \newline))
++       (data.impl/do-with-dataset ~(if (and (symbol? dataset)
++                                            (not (get &env dataset)))
++                                     `(data.impl/resolve-dataset-definition '~(ns-name *ns*) '~dataset)
++                                     dataset)
++                                  (fn [] ~@body)))))
+ 
+ (defmacro with-temp-copy-of-db
+   "Run `body` with the current DB (i.e., the one that powers `data/db` and `data/id`) bound to a temporary copy of the
 diff --git a/test/metabase/test/initialize.clj b/test/metabase/test/initialize.clj
 index 4f9f501..7d9be87 100644
 --- a/test/metabase/test/initialize.clj
@@ -556,23 +612,3 @@ index 6f16a00..0000000
 -                  ;; check the query again; the tunnel should have been reestablished
 -                  (check-data))))
 -            (finally (.stop ^Server server))))))))
-diff --git a/test_config/log4j2-test.xml b/test_config/log4j2-test.xml
-index fbb6f45..023acf2 100644
---- a/test_config/log4j2-test.xml
-+++ b/test_config/log4j2-test.xml
-@@ -6,11 +6,11 @@
-     </Console>
-   </Appenders>
-   <Loggers>
--    <Logger name="metabase" level="FATAL"/>
--    <Logger name="metabase-enterprise" level="FATAL"/>
--    <Logger name="liquibase" level="FATAL"/>
-+    <Logger name="metabase" level="DEBUG"/>
-+    <Logger name="metabase-enterprise" level="DEBUG"/>
-+    <Logger name="liquibase" level="DEBUG"/>
- 
--    <Root level="ERROR">
-+    <Root level="DEBUG">
-       <AppenderRef ref="Console"/>
-     </Root>
-   </Loggers>
