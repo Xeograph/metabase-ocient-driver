@@ -245,62 +245,6 @@ index 66111a0..92afe6b 100644
 -                                           (s/required-key "6-10") (>= 1)
 -                                           s/Str                   s/Any}}
 -                   (#'metabase.analytics.stats/alert-metrics))))))
-diff --git a/test/metabase/test/data.clj b/test/metabase/test/data.clj
-index c985e94..8772cb8 100644
---- a/test/metabase/test/data.clj
-+++ b/test/metabase/test/data.clj
-@@ -33,7 +33,8 @@
-       ;; -> {:source-table (data/id :venues), :fields [(data/id :venues :name)]}
- 
-      (There are several variations of this macro; see documentation below for more details.)"
--  (:require [clojure.test :as t]
-+  (:require [clojure.string :as str]
-+            [clojure.test :as t]
-             [colorize.core :as colorize]
-             [metabase.driver.ddl.interface :as ddl.i]
-             [metabase.query-processor :as qp]
-@@ -202,6 +203,12 @@
-   ([table-name field-name & nested-field-names]
-    (apply data.impl/the-field-id (id table-name) (map format-name (cons field-name nested-field-names)))))
- 
-+
-+(def dataset-blacklist
-+  (set (map symbol (str/split
-+                    (tx/db-test-env-var :ocient :dataset-blacklist "")
-+                    ","))))
-+
- (defmacro dataset
-   "Create a database and load it with the data defined by `dataset`, then do a quick metadata-only sync; make it the
-   current DB (for [[metabase.test.data]] functions like [[id]] and [[db]]), and execute `body`.
-@@ -227,15 +234,19 @@
-      (data/dataset (get-dataset-definition) ...)"
-   {:style/indent 1}
-   [dataset & body]
--  `(t/testing (colorize/magenta ~(str (if (symbol? dataset)
--                                        (format "using %s dataset" dataset)
--                                        "using inline dataset")
--                                      \newline))
--     (data.impl/do-with-dataset ~(if (and (symbol? dataset)
--                                          (not (get &env dataset)))
--                                   `(data.impl/resolve-dataset-definition '~(ns-name *ns*) '~dataset)
--                                   dataset)
--                                (fn [] ~@body))))
-+  `(if (and 
-+        (symbol? dataset) 
-+        (contains? dataset-blacklist dataset))
-+     (constantly 0) ;; Just skip the test
-+     (t/testing (colorize/magenta ~(str (if (symbol? dataset)
-+                                          (format "using %s dataset" dataset)
-+                                          "using inline dataset")
-+                                        \newline))
-+       (data.impl/do-with-dataset ~(if (and (symbol? dataset)
-+                                            (not (get &env dataset)))
-+                                     `(data.impl/resolve-dataset-definition '~(ns-name *ns*) '~dataset)
-+                                     dataset)
-+                                  (fn [] ~@body)))))
- 
- (defmacro with-temp-copy-of-db
-   "Run `body` with the current DB (i.e., the one that powers `data/db` and `data/id`) bound to a temporary copy of the
 diff --git a/test/metabase/test/initialize.clj b/test/metabase/test/initialize.clj
 index 4f9f501..7d9be87 100644
 --- a/test/metabase/test/initialize.clj
@@ -317,6 +261,96 @@ index 4f9f501..7d9be87 100644
  
  ;; initialize test drivers that are not shipped as part of the product
  ;; this is needed because if DRIVERS=all in the environment, then only the directories within modules are searched to
+diff --git a/test/metabase/test_runner.clj b/test/metabase/test_runner.clj
+index a7b8e0c..148378e 100644
+--- a/test/metabase/test_runner.clj
++++ b/test/metabase/test_runner.clj
+@@ -4,12 +4,16 @@
+   (:require [clojure.java.classpath :as classpath]
+             [clojure.java.io :as io]
+             [clojure.pprint :as pprint]
++            [clojure.string :as str]
+             [clojure.test :as t]
++            [clojure.tools.logging :as log]
+             [clojure.tools.namespace.find :as ns.find]
++            [eftest.report :as report]
+             eftest.report.pretty
+             eftest.report.progress
+             eftest.runner
+             [environ.core :as env]
++            [io.aviso.ansi :as ansi]
+             [metabase.config :as config]
+             [metabase.test-runner.assert-exprs :as test-runner.assert-exprs]
+             [metabase.test-runner.init :as test-runner.init]
+@@ -130,16 +134,42 @@
+ 
+ (alter-var-root #'t/test-var (constantly run-test))
+ 
+-(defn- reporter
++(defn- testing-scope-str [{:keys [file line]}]
++  (let [[ns scope] report/*testing-path*]
++    (str
++     (cond
++       (keyword? scope)
++       (str (:clojure-frame eftest.report.pretty/*fonts*) (ns-name ns) (:reset eftest.report.pretty/*fonts*) " during "
++            (:function-name eftest.report.pretty/*fonts*) scope (:reset eftest.report.pretty/*fonts*))
++
++       (var? scope)
++       (str (:clojure-frame eftest.report.pretty/*fonts*) (ns-name ns) "/"
++            (:function-name eftest.report.pretty/*fonts*) (:name (meta scope)) (:reset eftest.report.pretty/*fonts*)))
++     (when (or file line)
++       (str " (" (:source eftest.report.pretty/*fonts*) file ":" line (:reset eftest.report.pretty/*fonts*) ")")))))
++
++(defn reporter
+   "Create a new test reporter/event handler, a function with the signature `(handle-event event)` that gets called once
+   for every [[clojure.test]] event, including stuff like `:begin-test-run`, `:end-test-var`, and `:fail`."
+-  []
++  [& reporters]
+   (let [stdout-reporter (if (or (env/env :ci) config/is-dev?)
+                           eftest.report.pretty/report
+                           eftest.report.progress/report)]
+-    (fn handle-event [event]
++    (fn handle-event [{:keys [type] :as event}]
+       (test-runner.junit/handle-event! event)
+-      (stdout-reporter event))))
++      (stdout-reporter event)
++      (let [desc (case type
++                   :begin-test-var {:text "BEGIN TEST" :color (:divider eftest.report.pretty/*fonts*)}
++                   :pass {:text "PASS" :color (:pass eftest.report.pretty/*fonts*)}
++                   :fail {:text "FAIL" :color (:fail eftest.report.pretty/*fonts*)}
++                   :error {:text "ERROR" :color (:error eftest.report.pretty/*fonts*)}
++                   nil)]
++        (if (not (nil? desc))
++          (let [test-desc (str (:text desc) " in " (testing-scope-str event) " " (t/testing-contexts-str))]
++            (log/info (str (:color desc) test-desc)))
++          nil))
++      (for [reporter reporters]
++        (reporter event)))))
+ 
+ (defn run
+   "Run `test-vars` with `options`, which are passed directly to [[eftest.runner/run-tests]].
+@@ -152,7 +182,7 @@
+   ([test-vars]
+    (run test-vars nil))
+ 
+-  ([test-vars options]
++  ([test-vars {:keys [report] :as options}]
+    ;; don't randomize test order for now please, thanks anyway
+    (with-redefs [eftest.runner/deterministic-shuffle (fn [_ test-vars] test-vars)]
+      (binding [*parallel-test-counter* (atom {})]
+@@ -162,8 +192,10 @@
+          (merge
+           {:capture-output? false
+            :multithread?    (when enable-parallel-tests? :vars)
+-           :report          (reporter)}
+-          options))
++           :report          (if (nil? report)
++                              (reporter)
++                              (reporter report))}
++          (dissoc options :report)))
+         @*parallel-test-counter*)))))
+ 
+ ;;;; `clojure -X` entrypoint
 diff --git a/test/metabase/util/ssh_test.clj b/test/metabase/util/ssh_test.clj
 deleted file mode 100644
 index 6f16a00..0000000
