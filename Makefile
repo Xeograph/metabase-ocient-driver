@@ -52,6 +52,10 @@ run: build
 		-p 3000:3000 \
 		metabase_ocient:$(METABASE_VERSION)
 
+# Restart the Metabase container
+restart:
+	docker restart metabase_ocient_$(METABASE_VERSION)
+
 # Start the Metabase container
 start:
 	docker start metabase_ocient_$(METABASE_VERSION)
@@ -64,15 +68,17 @@ stop:
 rm:
 	docker rm metabase_ocient_$(METABASE_VERSION)
 
+# Removes any build artifacts and containers
 clean:
 	rm -rf target
 	docker stop metabase_ocient_$(METABASE_VERSION) || true
 	docker rm metabase_ocient_$(METABASE_VERSION) || true
+	docker image rm metabase_ocient:$(METABASE_VERSION) || true
 
 # Rebuild the driver and update the running metabase instance
 update: driver
 	docker cp target/ocient.metabase-driver.jar metabase_ocient_$(METABASE_VERSION):/plugins/
-	docker restart metabase_ocient_$(METABASE_VERSION)
+	docker cp resources/log4j2.xml metabase_ocient_$(METABASE_VERSION):/var/log/
 	docker restart metabase_ocient_$(METABASE_VERSION)
 
 # Output the Ocient driver version

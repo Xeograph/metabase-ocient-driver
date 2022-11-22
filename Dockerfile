@@ -27,7 +27,7 @@ RUN curl -Lo - https://github.com/metabase/metabase/archive/refs/tags/${METABASE
 # Copy our project assets over
 COPY deps.edn /build/metabase/modules/drivers/ocient/
 COPY src/ /build/metabase/modules/drivers/ocient/src
-COPY resources/ /build/metabase/modules/drivers/ocient/resources
+COPY resources/metabase-plugin.yaml /build/metabase/modules/drivers/ocient/resources/
 
 WORKDIR /build/metabase
 
@@ -157,10 +157,41 @@ ARG TARBALL_NAME=metabase_test_${METABASE_TEST_TARBALL_VERSION}
 COPY --from=stg_test_tarball  /build/metabase_test/target/${TARBALL_NAME}.tar.gz /
 
 
+###################
+# Run Tests stage #
+###################
+FROM stg_driver_build as stg_run_tests
+
+COPY test/metabase/test/data/* ./test/metabase/test/data/
+COPY test/metabase/driver/* ./test/metabase/driver/
+
+RUN mkdir -p /build/metabase/plugins \
+    && mv /build/metabase/resources/modules/ocient.metabase-driver.jar /build/metabase/plugins/
+
+RUN --mount=type=cache,target=/root/.m2/repository \
+    clojure -X:deps prep
+
+RUN --mount=type=cache,target=/root/.m2/repository \
+    clojure -X:test:deps prep
+
+RUN --mount=type=cache,target=/root/.m2/repository \
+    clojure -X:dev:drivers:drivers-dev:test:deps prep
+
+ENV CI=true
+ENV DRIVERS=ocient
+ENV PARALLEL=true
+ENV MB_OCIENT_TEST_HOST=172.17.0.1
+ENV MB_OCIENT_TEST_PORT=4050
+
+
 ################
 # Run Metabase #
 ################
 FROM metabase/metabase:${METABASE_VERSION} AS stg_runner
+
+COPY resources/log4j2.xml /var/log/log4j2.xml
+
+ENV LOG4J_CONFIGURATION_FILE=/var/log/log4j2.xml
 
 # A metabase user/group is manually added in https://github.com/metabase/metabase/blob/master/bin/docker/run_metabase.sh
 # Make the UID and GID match
