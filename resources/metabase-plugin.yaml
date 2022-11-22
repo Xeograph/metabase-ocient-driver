@@ -22,8 +22,44 @@ driver:
         - name: db
           display-name: Database name
           placeholder: DATABASE NAME
-    - user
-    - password
+    - name: sso
+      display-name: Single Sign-On
+      type: boolean
+      default: false
+      placeholder: false
+    - name: token-type
+      display-name: Single Sign-On Token Type
+      helper-text: "The OAuth 2.0 token type. Valid options are: 'access_token' or 'id_token'"
+      type: string
+      placeholder: access_token
+      default: access_token
+      required: false
+      visible-if:
+        sso: true
+    - name: token
+      display-name: Single Sign-On Token
+      type: secret
+      required: false
+      default: ""
+      placeholder: OAuth 2.0 Token
+      visible-if:
+        sso: true
+    - merge:
+      - user
+      - name: user
+        display-name: User
+        required: false
+        default: ""
+        visible-if:
+          sso: false
+    - merge:
+      - password
+      - name: password
+        display-name: Password
+        required: false
+        default: ""
+        visible-if:
+          sso: false
     - advanced-options-start
     - merge:
         - additional-options

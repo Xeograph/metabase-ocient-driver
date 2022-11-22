@@ -69,10 +69,14 @@
                       (if (string? port)
                         (Integer/parseInt port)
                         port)))
-      ;; (assoc :pooling "OFF")
       ;; remove :ssl in case it's false; DB will still try (& fail) to connect if the key is there
-      (dissoc :ssl)
-      (merge {:sslmode "disable", :statementPooling "OFF", :force "true"})
+      (merge 
+       {:sslmode "disable", :statementPooling "OFF", :force "true"}
+       (when (:sso details-map)
+          {:handshake "SSO"
+           :user (:token-type details-map)
+           :password (:token details-map)}))
+      (dissoc :ssl :token-type :token)
       (set/rename-keys {:dbname :db})
       ocient
       ;; note: seperator style is misspelled in metabase core code
