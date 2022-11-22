@@ -294,3 +294,11 @@
 (defmethod sql.qp/unix-timestamp->honeysql [:ocient :microseconds]
   [driver _ field-or-value]
   (sql.qp/unix-timestamp->honeysql driver :seconds (hx// field-or-value (hsql/raw 1000000))))
+
+;; Remove backslash when column name starts with a number
+(defmethod driver/describe-table :ocient
+  [driver database table]
+  (let [table-description (sql-jdbc.sync/describe-table driver database table)]
+            (assoc table-description :fields
+              (set (mapv #(update % :name (fn [name] (clojure.string/replace-first name #"^\\" "")))
+                         (get table-description :fields))))))
