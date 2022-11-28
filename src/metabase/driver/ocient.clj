@@ -295,10 +295,15 @@
   [driver _ field-or-value]
   (sql.qp/unix-timestamp->honeysql driver :seconds (hx// field-or-value (hsql/raw 1000000))))
 
-;; Remove backslash when column name starts with a number
+(defn unescape-column-names
+  "Remove escape characters for column names"
+  [table-description]
+  (assoc table-description :fields
+    (set (mapv #(update % :name (fn [name]  (-> name
+                                              (clojure.string/replace #"^\\([^A-Za-z])" "$1")     ;; Non-letters are escaped at beginning of column name 
+                                              (clojure.string/replace #"\\([(),.\[\]])" "$1"))))  ;; Characters (),.[] are always escaped
+                       (get table-description :fields)))))
+
 (defmethod driver/describe-table :ocient
   [driver database table]
-  (let [table-description (sql-jdbc.sync/describe-table driver database table)]
-            (assoc table-description :fields
-              (set (mapv #(update % :name (fn [name] (clojure.string/replace-first name #"^\\" "")))
-                         (get table-description :fields))))))
+  (unescape-column-names (sql-jdbc.sync/describe-table driver database table)))

@@ -3,6 +3,7 @@
             [metabase.driver.sql-jdbc.connection :as sql-jdbc.conn]
             [metabase.test :as mt]
             [metabase.test.data.sql.ddl :as ddl]
+            [metabase.driver.ocient :as oc]
             [metabase.util.honeysql-extensions :as hx]))
 
 (deftest additional-connection-string-options-test
@@ -32,3 +33,25 @@
                            (ddl/insert-rows-ddl-statements :ocient (hx/identifier :table "my_db" "my_table") [{:col1 "A", :col2 1}
                                                                                                               {:col1 "B", :col2 2}
                                                                                                               {:col1 "C", :col2 3}]))))))
+
+(deftest unescape-column-names-test
+  (mt/test-driver :ocient
+                  (testing "Make sure we unescape column names correctly "
+                    (is (= {:fields (set (mapv #(hash-map :name %) ["0123"
+                                                                    "\\123"
+                                                                    "a(),.[]"
+                                                                    "a23\\d"
+                                                                    "[bc"
+                                                                    "!bc"
+                                                                    "b!c"
+                                                                    "\\[bc"
+                                                                    "abc"]))}
+                            (oc/unescape-column-names {:fields (mapv #(hash-map :name %) ["\\0123"
+                                                                                          "\\\\123"
+                                                                                          "a\\(\\)\\,\\.\\[\\]"
+                                                                                          "a23\\d"
+                                                                                          "\\\\[bc"
+                                                                                          "\\!bc"
+                                                                                          "b!c"
+                                                                                          "\\\\\\[bc"
+                                                                                          "abc"])}))))))
