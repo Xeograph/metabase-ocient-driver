@@ -1,7 +1,9 @@
 (ns metabase.driver.ocient
   "Metabase Ocient Driver."
   (:require [clojure
-             [set :as set]]
+             [set :as set]
+             [string :as str]
+             [core :as core]]
             [clojure.tools.logging :as log]
             [honeysql.core :as hsql]
             [honeysql.format :as hformat]
@@ -70,14 +72,21 @@
                         (Integer/parseInt port)
                         port)))
       ;; remove :ssl in case it's false; DB will still try (& fail) to connect if the key is there
-      (merge 
+      (merge
        {:sslmode "disable", :statementPooling "OFF", :force "true"}
+       ;; marshal Single Sign-On properties
        (when (:sso details-map)
-          {:handshake "SSO"
-           :user (:token-type details-map)
-           :password (:token details-map)}))
-      (dissoc :ssl :token-type :token)
+         {:handshake "SSO"
+          :user (:token-type details-map)
+          :password (:token details-map)}))
+      ;; remove keys we no longer need
+      (dissoc :ssl :token-type :token :sso)
       (set/rename-keys {:dbname :db})
+      ;; remove the trailing semicolon from additional options
+      (when (and (some? (:additional-options details-map))
+                 (->> (core/take-last 1 (:additional-options details-map))
+                      (contains? #{";" "⅋"})))
+        (update details-map :additional-options #(str/join "" (drop-last %))))
       ocient
       ;; note: seperator style is misspelled in metabase core code
       (sql-jdbc.common/handle-additional-options details-map, :seperator-style :semicolon)))
