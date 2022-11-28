@@ -61,16 +61,8 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 ###########################
 FROM stg_driver as stg_driver_test
 
-COPY test/ /build/metabase/modules/drivers/ocient/test
 COPY --from=stg_driver_build /build/metabase/resources/modules/ocient.metabase-driver.jar /build/metabase/plugins/
-RUN clojure -X:test:deps prep
-# Some dependencies still get downloaded when the command below is run, but I'm not sure why
-
-# Default docker bridge address
-ENV MB_OCIENT_TEST_HOST=172.17.0.1
-ENV MB_OCIENT_TEST_PORT=4050
-ENV DRIVERS=ocient
-CMD ["clojure", "-X:dev:drivers:drivers-dev:test", ":only", "metabase.driver.ocient-unit-test"]
+COPY test/metabase/driver/ocient_unit_test.clj test/metabase/driver/
 
 
 ############################
