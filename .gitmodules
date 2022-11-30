@@ -1,0 +1,3 @@
+[submodule "metabase"]
+	path = metabase
+	url = git@github.com:metabase/metabase.git
