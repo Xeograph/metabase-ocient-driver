@@ -10,6 +10,7 @@
             [java-time :as t]
             [metabase.config :as config]
             [metabase.driver :as driver]
+            [metabase.driver.common :as driver.common]
             [metabase.driver.sql-jdbc
              [common :as sql-jdbc.common]
              [connection :as sql-jdbc.conn]
@@ -19,7 +20,9 @@
             [metabase.driver.sql.util.unprepare :as unprepare]
             [metabase.util
              [date-2 :as u.date]
-             [honeysql-extensions :as hx]])
+             [honeysql-extensions :as hx]]
+            [metabase.util :as u]
+            [metabase.util.i18n :refer [deferred-tru trs tru]])
 
   (:import [java.sql PreparedStatement Types]
            [java.time LocalTime OffsetDateTime ZonedDateTime Instant OffsetTime ZoneId]
@@ -47,6 +50,63 @@
   ;; for more details.
   :monday)
 
+(defmethod driver/connection-properties :ocient
+  [_]
+  ;; TODO 
+  ;;
+  ;; Metabase doesn't allow lazily loaded drivers to define connection
+  ;; properties outside of the plugin manifest. This wouldn't be a problem,
+  ;; but Metabase also prevents the :select property type from being used
+  ;; via linter check. Is there a way around this?
+  (->>
+   [driver.common/default-host-details
+    (assoc driver.common/default-port-details :placeholder 4050)
+    driver.common/default-dbname-details
+    {:name "schema-filters"
+     :type :schema-filters
+     :display-name "Schemas"}
+    {:name "authentication-method"
+     :display-name (trs "The authentication method used to connect to the database")
+     :type :select
+     :options [{:name "Password"
+                :value "password"}
+               {:name "Single Sign-On"
+                :value "sso"}]
+     :default "password"
+     :placeholder "password"
+     :required true}
+    {:name "token-type"
+     :display-name (trs "The type of the Single Sign-On token")
+     :type :select
+     :options [{:name "access_token"
+                :value "access-token"}
+               {:name "id_token"
+                :value "id-token"}]
+     :default "access-token"
+     :placeholder "access-token"
+     :required false
+     :visible-if {:authentication-method "sso"}}
+    {:name "token"
+     :type :secret
+     :required false
+     :visible-if {:authentication-method "sso"}}
+    (merge driver.common/default-user-details
+           {:display-name (trs "User")
+            :required false
+            :default ""
+            :visible-if {:authentication-method "password"}})
+    (merge driver.common/default-password-details
+           {:display-name (trs "Password")
+            :required false
+            :default ""
+            :visible-if {:authentication-method "password"}})
+    driver.common/advanced-options-start
+    driver.common/additional-options
+    driver.common/default-advanced-options]
+   (map u/one-or-many)
+   (apply concat)))
+
+
 ; ;;; +----------------------------------------------------------------------------------------------------------------+
 ; ;;; |                                         metabase.driver.sql-jdbc impls                                         |
 ; ;;; +----------------------------------------------------------------------------------------------------------------+
@@ -54,7 +114,7 @@
 (defn- make-subname [host port db]
   (str "//" host ":" port "/" db))
 
-(defn ocient
+(defn handle-ocient-properties
   "Create a Clojure JDBC database specification for the Ocient DB."
   [{:keys [host port db]
     :or   {host "localhost", port 4050, db "system"}
@@ -62,8 +122,37 @@
   (merge
    {:classname                     "com.ocient.jdbc.JDBCDriver"
     :subprotocol                   "ocient"
-    :subname                       (make-subname host port db)}
+    :subname                       (make-subname host port db)
+    :statementPooling "OFF"}
    (dissoc opts :host :port :db)))
+
+(defn- replace-trailing-semicolon
+  [s]
+  ;; (log/infof "Hello from replace-trailing-semicolon: %s" (pr-str s))
+  (let [last-char (str/join "" (core/take-last 1 s))]
+    (cond-> s
+      (core/contains? #{";" "⅋"} last-char) (->>
+                                             (drop-last)
+                                             (str/join "")))))
+
+(defn- handle-additional-properties
+  "Marshal Single additional connection peroperties"
+  [opts]
+  (let [additional-options (:additional-options opts)
+        sanitized-options (cond-> opts
+                            opts (merge {:additional-options (replace-trailing-semicolon additional-options)}))]
+    ;; note: seperator style is misspelled in metabase core code
+    (sql-jdbc.common/handle-additional-options sanitized-options sanitized-options, :seperator-style :semicolon)))
+     
+(defn handle-sso-properties
+  "Marshal Single Sign-On connection peroperties"
+  [{:keys [sso token-type token]
+    :or {sso false, token-type "", token ""}
+    :as opts}]
+  (merge (when sso {:handshake "SSO"
+                    :user token-type
+                    :password token})
+         (dissoc opts :sso :token-type :token)))
 
 (defmethod sql-jdbc.conn/connection-details->spec :ocient [_ {_ :ssl, :as details-map}]
   (-> details-map
@@ -71,25 +160,11 @@
                       (if (string? port)
                         (Integer/parseInt port)
                         port)))
-      ;; remove :ssl in case it's false; DB will still try (& fail) to connect if the key is there
-      (merge
-       {:sslmode "disable", :statementPooling "OFF", :force "true"}
-       ;; marshal Single Sign-On properties
-       (when (:sso details-map)
-         {:handshake "SSO"
-          :user (:token-type details-map)
-          :password (:token details-map)}))
       ;; remove keys we no longer need
-      (dissoc :ssl :token-type :token :sso)
       (set/rename-keys {:dbname :db})
-      ;; remove the trailing semicolon from additional options
-      (when (and (some? (:additional-options details-map))
-                 (->> (core/take-last 1 (:additional-options details-map))
-                      (contains? #{";" "⅋"})))
-        (update details-map :additional-options #(str/join "" (drop-last %))))
-      ocient
-      ;; note: seperator style is misspelled in metabase core code
-      (sql-jdbc.common/handle-additional-options details-map, :seperator-style :semicolon)))
+      (handle-ocient-properties)
+      (handle-sso-properties)
+      (handle-additional-properties)))
 
 
 ;; We'll do regex pattern matching here for determining Field types because Ocient types can have optional lengths,
