@@ -6,7 +6,7 @@
 There are a few options to installing a Metabase community driver. The simplest is to copy the JAR file into the plugins directory in your Metabase directory (the directory where you run the Metabase JAR). Additionally, you can change the location of the plugins directory by setting the environment variable `MB_PLUGINS_DIR`.
 
 ### Docker
-Use the [`Dockerfile`](./Dockerfile) to build an image of Metabase with the Ocient diver pre-installed:
+Use the [`Dockerfile`](./Dockerfile) to build an image of Metabase with the Ocient driver pre-installed:
 ```shell
 git clone git@github.com:Xeograph/metabase-ocient-driver.git
 cd metabase-ocient-driver

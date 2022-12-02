@@ -30,7 +30,7 @@ WORKDIR /build/metabase
 RUN git checkout $(curl -s -H "Accept: application/vnd.github+json" https://api.github.com/repos/metabase/metabase/git/ref/tags/${METABASE_VERSION} | jq .object.sha | xargs echo)
 
 # Then prep our Metabase dependencies
-# We need to build java deps and then spark-sql deps
+# We need to build java deps
 # Ref: https://github.com/metabase/metabase/wiki/Migrating-from-Leiningen-to-tools.deps#preparing-dependencies
 RUN --mount=type=cache,target=/root/.m2/repository \
     clojure -X:deps prep
@@ -42,9 +42,9 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 
 WORKDIR /build
 
-##############
+################
 # Driver stage #
-##############
+################
 FROM stg_base AS stg_driver
 
 COPY deps.edn ./
