@@ -71,7 +71,7 @@
 
  ;; includes test code as source paths. Run tests with clojure -X:dev:test
   :test
-  {:extra-paths ["test" "metabase/test" "metabaase/dev/src" "metabase/local/src" "metabase/shared/test" "metabase/test_resources"]
+  {:extra-paths ["test" "metabase/test" "metabase/dev/src" "metabase/local/src" "metabase/shared/test" "metabase/test_resources"]
    :extra-deps {io.github.cognitect-labs/test-runner
                 {:git/tag "v0.5.0" :git/sha "b3fd0d2"}}
    :main-opts ["-m" "cognitect.test-runner"]
