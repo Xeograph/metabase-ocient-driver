@@ -22,8 +22,12 @@ build:
 	clojure -X:build :project-dir "\"$(shell pwd)\""
 
 # Run Metabase
-run:
+run: build
 	clojure -X:run :project-dir "\"$(shell pwd)\""
+
+# Run Ocient unit tests
+run-unit-test:
+	DRIVERS=ocient clojure -X:unit-test :project-dir "\"$(shell pwd)\""
 
 # Builds the test tarball which can be deployed in environments with JAVA installed
 test-tarball:
