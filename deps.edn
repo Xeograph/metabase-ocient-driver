@@ -11,9 +11,12 @@
  :aliases
  {:build
   {:extra-deps {metabase/metabase-core {:local/root "metabase"}
-                metabase/build-drivers {:local/root "metabase/bin/build-drivers"}}
+                metabase/build-drivers {:local/root "metabase/bin/build-drivers"
+                                        ;; for whatever reason, the athena JDBC driver gets pulled in??
+                                        :exclusions  [com.metabase/athena-jdbc]}}
    :exec-fn    build-drivers.build-driver/build-driver!
    :exec-args  {:driver      :ocient
+                :extra-paths ["src" "resources"]
                 :project-dir "."
                 :target-dir  "./plugins"}}
 
@@ -33,7 +36,7 @@
     cloverage/cloverage                                   {:mvn/version "1.2.2"}
     eftest/eftest                                         {:mvn/version "0.5.9"}
     jonase/eastwood                                       {:mvn/version "1.2.2"}
-    metabase/metabase-core {:local/root "metabase"}
+    metabase/metabase-core                                {:local/root "metabase"}
     pjstadig/humane-test-output                           {:mvn/version "0.11.0"}
     reifyhealth/specmonstah                               {:mvn/version "2.0.0"
                                                            :exclusions  [org.clojure/clojure

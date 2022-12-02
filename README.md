@@ -16,7 +16,7 @@ make run
 ### Use custom Metabase JAR
 If you already have a Metabase binary release (see [Metabase distribution page](https://metabase.com/start/jar.html)):
 
-1. Download the Ocient driver jar from this repository's ["Releases"](https://github.com/dacort/metabase-ocient-driver/releases) page.
+1. Download the Ocient driver jar from this repository's ["Releases"](https://github.com/Xeograph/metabase-ocient-driver/releases) page.
 2. Create a directory and copy the `metabase.jar` to it.
 3. In that directory create a sub-directory called `plugins` and copy the Ocient driver jar into it.
 4. From the directory created in step 2, run `java -jar metabase.jar`.
