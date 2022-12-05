@@ -241,14 +241,19 @@
 (defmethod sql-jdbc.execute/read-column-thunk [:ocient Types/DATE]
   [_ rs _ i]
   (fn []
-    (.toLocalDate (.getDate ^java.sql.ResultSet rs ^Integer i))))
+    (let [d (.getDate ^java.sql.ResultSet rs ^Integer i)]
+      (if (nil? d)
+        nil
+        (.toLocalDate d)))))
 
 (defmethod sql-jdbc.execute/read-column-thunk [:ocient Types/TIME]
   [_ rs _ i]
   ;; XGTime values are ALWAYS in UTC
   (fn []
-    (let [utc-str (.toString (.getTime ^java.sql.ResultSet rs ^Integer i))]
-      (LocalTime/parse utc-str))))
+    (let [time (.getTime ^java.sql.ResultSet rs ^Integer i)]
+      (if (nil? time)
+        nil
+        (LocalTime/parse (.toString time))))))
 
 (defmethod sql-jdbc.execute/read-column-thunk [:ocient Types/TIMESTAMP_WITH_TIMEZONE]
   [_ rs _ i]
