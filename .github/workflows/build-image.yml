@@ -17,6 +17,8 @@ jobs:
       -
         name: Checkout
         uses: actions/checkout@v2
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
       - name: Maven cache
         uses: actions/cache@v1
         with:
