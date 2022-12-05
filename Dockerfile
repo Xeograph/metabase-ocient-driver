@@ -1,9 +1,13 @@
 ARG METABASE_VERSION=v0.44.4
+ARG METABASE_EDITION=oss
 
 #################
 # Metabase repo #
 #################
 FROM clojure:openjdk-11-tools-deps-slim-buster AS stg_base
+
+ARG METABASE_EDITION
+ARG METABASE_VERSION
 
 # Reequirements for building the driver
 RUN apt-get update && \
@@ -17,28 +21,13 @@ RUN apt-get update && \
 # Set our base workdir
 WORKDIR /build
 
-# We need to retrieve metabase source
-# Due to how ARG and FROM interact, we need to re-use the same ARG
-# Ref: https://docs.docker.com/engine/reference/builder/#understand-how-arg-and-from-interact
-ARG METABASE_VERSION
-RUN curl -Lo - https://github.com/metabase/metabase/archive/refs/tags/${METABASE_VERSION}.tar.gz | tar -xz \
-    && mv metabase-* metabase
-
-# Copy our project assets over
-COPY deps.edn /build/metabase/modules/drivers/ocient/
-COPY src/ /build/metabase/modules/drivers/ocient/src
-COPY resources/metabase-plugin.yaml /build/metabase/modules/drivers/ocient/resources/
+# Initialize Metabase submodule
+RUN git init \
+    && git submodule add https://github.com/metabase/metabase.git \
+    && git submodule init
 
 WORKDIR /build/metabase
-
-######################################
-# Base stage with Ocient driver deps #
-######################################
-FROM stg_base as stg_driver
-
-# Link any Ocient deps required to build or test the driver
-COPY patches/ocient-driver.patch /build/
-RUN git apply /build/ocient-driver.patch
+RUN git checkout $(curl -s -H "Accept: application/vnd.github+json" https://api.github.com/repos/metabase/metabase/git/ref/tags/${METABASE_VERSION} | jq .object.sha | xargs echo)
 
 # Then prep our Metabase dependencies
 # We need to build java deps
@@ -46,47 +35,77 @@ RUN git apply /build/ocient-driver.patch
 RUN --mount=type=cache,target=/root/.m2/repository \
     clojure -X:deps prep
 
+WORKDIR /build/metabase/bin
+RUN --mount=type=cache,target=/root/.m2/repository \
+    clojure -X:deps prep
 
-###########################
-# Build the Ocient driver #
-###########################
-FROM stg_driver as stg_driver_build
+
+WORKDIR /build
+
+################
+# Driver stage #
+################
+FROM stg_base AS stg_driver
+
+COPY deps.edn ./
+COPY resources ./resources
+COPY src ./src
+
+
+##############
+# Test stage #
+##############
+FROM stg_driver as stg_unit_test
+
+COPY test ./
+
+# Run the unit tests
+RUN --mount=type=cache,target=/root/.m2/repository \
+    CI=true \
+    DRIVERS=ocient \
+    clojure -X:dev:unit-test \
+    :project-dir "\"$(pwd)\""
+
+
+###############
+# Build stage #
+###############
+FROM stg_unit_test as stg_build
 
 RUN --mount=type=cache,target=/root/.m2/repository \
-    bin/build-driver.sh ocient
+    clojure -X:build:deps prep \
+    :project-dir "\"$(pwd)\""
 
-
-###########################
-# Test the Ocient driver #
-###########################
-FROM stg_driver as stg_driver_test
-
-COPY --from=stg_driver_build /build/metabase/resources/modules/ocient.metabase-driver.jar /build/metabase/plugins/
-COPY test/metabase/driver/ocient_unit_test.clj test/metabase/driver/
+# Then build the driver
+RUN clojure -X:build \
+    :project-dir "\"$(pwd)\"" \
+    :target-dir  "./target" \
+    -v 100
 
 
 ############################
 # Export the Ocient driver #
 ############################
-FROM scratch as stg_driver_export
-COPY --from=stg_driver_build /build/metabase/resources/modules/ocient.metabase-driver.jar /
+FROM scratch as stg_export
+COPY --from=stg_build /build/target/ocient.metabase-driver.jar /
 
 
 ####################
 # Test build stage #
 ####################
-FROM stg_base as stg_test_build
+FROM stg_base as stg_test_uberjar
 
+WORKDIR /build/metabase
+
+COPY deps.edn /build/metabase/modules/drivers/ocient/
+COPY src/ /build/metabase/modules/drivers/ocient/src
+COPY resources/metabase-plugin.yaml /build/metabase/modules/drivers/ocient/resources/
 COPY test/metabase/test/data/* ./test/metabase/test/data/
 COPY test/metabase/driver/* ./test/metabase/driver/
+
+# FIXME Can we get rid of the patch here and build an uberjar via clojure???
 COPY patches/test-tarball.patch /build/
 RUN git apply /build/test-tarball.patch
-
-# Then prep our Metabase dependencies
-# We need to build java deps
-# Ref: https://github.com/metabase/metabase/wiki/Migrating-from-Leiningen-to-tools.deps#preparing-dependencies
-RUN --mount=type=cache,target=/root/.m2/repository \
-    clojure -X:deps prep
 
 RUN --mount=type=cache,target=/root/.m2/repository \
     clojure -X:test:deps prep
@@ -99,7 +118,7 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 ######################
 # Test tarball stage #
 ######################
-FROM stg_test_build as stg_test_tarball
+FROM stg_test_uberjar as stg_test_tarball
 
 ARG GIT_SHA
 ARG GIT_USER_NAME
@@ -149,33 +168,6 @@ ARG TARBALL_NAME=metabase_test_${METABASE_TEST_TARBALL_VERSION}
 COPY --from=stg_test_tarball  /build/metabase_test/target/${TARBALL_NAME}.tar.gz /
 
 
-###################
-# Run Tests stage #
-###################
-FROM stg_driver_build as stg_run_tests
-
-COPY test/metabase/test/data/* ./test/metabase/test/data/
-COPY test/metabase/driver/* ./test/metabase/driver/
-
-RUN mkdir -p /build/metabase/plugins \
-    && mv /build/metabase/resources/modules/ocient.metabase-driver.jar /build/metabase/plugins/
-
-RUN --mount=type=cache,target=/root/.m2/repository \
-    clojure -X:deps prep
-
-RUN --mount=type=cache,target=/root/.m2/repository \
-    clojure -X:test:deps prep
-
-RUN --mount=type=cache,target=/root/.m2/repository \
-    clojure -X:dev:drivers:drivers-dev:test:deps prep
-
-ENV CI=true
-ENV DRIVERS=ocient
-ENV PARALLEL=true
-ENV MB_OCIENT_TEST_HOST=172.17.0.1
-ENV MB_OCIENT_TEST_PORT=4050
-
-
 ################
 # Run Metabase #
 ################
@@ -187,6 +179,6 @@ ENV LOG4J_CONFIGURATION_FILE=/var/log/log4j2.xml
 
 # A metabase user/group is manually added in https://github.com/metabase/metabase/blob/master/bin/docker/run_metabase.sh
 # Make the UID and GID match
-COPY --chown=2000:2000 --from=stg_driver_build \
-    /build/metabase/resources/modules/ocient.metabase-driver.jar \
+COPY --chown=2000:2000 --from=stg_export \
+    /ocient.metabase-driver.jar \
     /plugins/ocient.metabase-driver.jar

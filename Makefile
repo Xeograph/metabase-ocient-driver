@@ -1,4 +1,4 @@
-.SILENT: driver-version test-tarball-version metabase-version
+.SILENT: install driver-version test-tarball-version metabase-version
 
 # Latest commit hash
 GIT_SHA=$(shell git rev-parse HEAD)
@@ -6,7 +6,7 @@ GIT_DIRTY=$(shell (git diff -s --exit-code && echo 0) || echo 1)
 GIT_USER_EMAIL=$(shell git config user.email)
 GIT_USER_NAME=$(shell git config user.name)
 
-METABASE_VERSION=$(shell cat metabase_version.txt)
+METABASE_VERSION=$(shell echo `cd metabase; git describe --tags;`)
 
 # Extract the driver version from the plugin manifest
 METABASE_OCIENT_VERSION=$(shell grep -o "version: .*" resources/metabase-plugin.yaml | cut -c 10-)
@@ -14,14 +14,20 @@ METABASE_OCIENT_VERSION=$(shell grep -o "version: .*" resources/metabase-plugin.
 # Extract the tarball version from the .txt file
 METABASE_TEST_TARBALL_VERSION=$(shell cat metabase_test_tarball_version.txt)
 
+install:
+	git submodule update --init
+
 # Builds the Metabase Ocient driver. A single JAR executable
-build-driver:
-	DOCKER_BUILDKIT=1 docker build \
-		--build-arg METABASE_VERSION="$(METABASE_VERSION)" \
-		--output target \
-		--target stg_driver_export \
-		-t metabase_ocient_driver:$(METABASE_OCIENT_VERSION) \
-		.
+build:
+	clojure -X:build :project-dir "\"$(shell pwd)\""
+
+# Run Metabase
+run: build
+	clojure -X:run :project-dir "\"$(shell pwd)\""
+
+# Run Ocient unit tests
+run-unit-test:
+	DRIVERS=ocient clojure -X:dev:unit-test :project-dir "\"$(shell pwd)\""
 
 # Builds the test tarball which can be deployed in environments with JAVA installed
 test-tarball:
@@ -39,61 +45,10 @@ test-tarball:
 		.
 
 # Build the Metabase container
-build:
+docker-build:
 	DOCKER_BUILDKIT=1 docker build \
 		-t metabase_ocient:$(METABASE_VERSION) \
 		.
-
-# Create and start the Metabase container
-run: build
-	DOCKER_BUILDKIT=1 docker run \
-		--name metabase_ocient_$(METABASE_VERSION) \
-		-d \
-		-p 3000:3000 \
-		metabase_ocient:$(METABASE_VERSION)
-
-# Run the unit tests for the Ocient driver
-run-driver-tests: build-driver
-	DOCKER_BUILDKIT=1 docker build \
-		-t metabase_ocient_driver_tests:$(METABASE_OCIENT_VERSION) \
-		--build-arg METABASE_VERSION="$(METABASE_VERSION)" \
-		--target stg_driver_test \
-		.
-
-	docker run \
-		--rm \
-		-it \
-		metabase_ocient_driver_tests:$(METABASE_OCIENT_VERSION) \
-		sh -c "clojure -X:dev:drivers:drivers-dev:test :only metabase.driver.ocient-unit-test"
-
-# Restart the Metabase container
-restart:
-	docker restart metabase_ocient_$(METABASE_VERSION)
-
-# Start the Metabase container
-start:
-	docker start metabase_ocient_$(METABASE_VERSION)
-
-# Stop the Metabase container
-stop:
-	docker stop metabase_ocient_$(METABASE_VERSION)
-
-# Delete the Metabase container
-rm:
-	docker rm metabase_ocient_$(METABASE_VERSION)
-
-# Removes any build artifacts and containers
-clean:
-	rm -rf target
-	docker stop metabase_ocient_$(METABASE_VERSION) || true
-	docker rm metabase_ocient_$(METABASE_VERSION) || true
-	docker image rm metabase_ocient:$(METABASE_VERSION) || true
-
-# Rebuild the driver and update the running metabase instance
-update: build-driver
-	docker cp target/ocient.metabase-driver.jar metabase_ocient_$(METABASE_VERSION):/plugins/
-	docker cp resources/log4j2.xml metabase_ocient_$(METABASE_VERSION):/var/log/
-	docker restart metabase_ocient_$(METABASE_VERSION)
 
 # Output the Ocient driver version
 driver-version:

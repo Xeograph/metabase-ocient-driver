@@ -2,7 +2,88 @@
  ["src" "resources"]
 
  :deps
- {com.ocient/ocient-jdbc4$jar-with-dependencies {:mvn/version "2.88"}}
+ {com.ocient/ocient-jdbc4$jar-with-dependencies {:mvn/version "2.93"}}
 
  :mvn/repos
- {"sonatype" {:url "https://oss.sonatype.org/content/groups/staging/"}}}
+ {"sonatype" {:url "https://oss.sonatype.org/content/groups/staging/"}}
+
+ ;; build the driver with clojure -X:build
+ :aliases
+ {:build
+  {:extra-deps {metabase/metabase-core {:local/root "metabase"}
+                metabase/build-drivers {:local/root "metabase/bin/build-drivers"
+                                        ;; for whatever reason, the athena JDBC driver gets pulled in??
+                                        :exclusions  [com.metabase/athena-jdbc]}}
+   :exec-fn    build-drivers.build-driver/build-driver!
+   :exec-args  {:driver      :ocient
+                :extra-paths ["src" "resources"]
+                :project-dir "."
+                :target-dir  "./plugins"}}
+
+  ;; for local development: start a REPL with
+  ;;
+  ;;    clojure -A:dev (basic dev REPL that includes test namespaces)
+  ;;
+  ;; You can start a web server from this REPL with
+  ;;
+  ;;    (require 'dev)
+  ;;    (dev/start!)
+  :dev
+  {:extra-deps
+   {clj-http-fake/clj-http-fake                           {:mvn/version "1.0.3"
+                                                           :exclusions  [slingshot/slingshot]}
+    clj-kondo/clj-kondo                                   {:mvn/version "2022.08.03"} ; this is not for RUNNING kondo, but so we can hack on custom hooks code from the REPL.
+    cloverage/cloverage                                   {:mvn/version "1.2.2"}
+    eftest/eftest                                         {:mvn/version "0.5.9"}
+    jonase/eastwood                                       {:mvn/version "1.2.2"}
+    metabase/metabase-core                                {:local/root "metabase"}
+    pjstadig/humane-test-output                           {:mvn/version "0.11.0"}
+    reifyhealth/specmonstah                               {:mvn/version "2.0.0"
+                                                           :exclusions  [org.clojure/clojure
+                                                                         org.clojure/clojurescript]}
+    ring/ring-mock                                        {:mvn/version "0.4.0"}
+    talltale/talltale                                     {:mvn/version "0.5.8"}}
+   :jvm-opts    ["-Dmb.run.mode=dev"
+                 "-Dmb.field.filter.operators.enabled=true"
+                 "-Dmb.test.env.setting=ABCDEFG"
+                 "-Duser.timezone=UTC"
+                 "-Dfile.encoding=UTF-8"
+                 "-Duser.language=en"
+                 "-Duser.country=US"
+                 ;; If Clojure fails to start (e.g. because of a compilation error somewhere) print the error
+                 ;; report/stacktrace to stderr rather than to a random EDN file in /tmp/
+                 "-Dclojure.main.report=stderr"
+                 ;; Exceptions that get thrown repeatedly are created without stacktraces as a performance
+                 ;; optimization in newer Java versions. This makes debugging pretty hard when working on stuff
+                 ;; locally -- prefer debuggability over performance for local dev work.
+                 "-XX:-OmitStackTraceInFastThrow"
+                 ;; prevent Java icon from randomly popping up in macOS dock
+                 "-Djava.awt.headless=true"]}
+
+  ;; includes unit test code as source paths. Run unit tests with clojure -X:dev:unit-test
+  :unit-test
+  {:extra-paths ["test" "metabase/test"]
+   :extra-deps {io.github.cognitect-labs/test-runner
+                {:git/tag "v0.5.0" :git/sha "b3fd0d2"}}
+   :main-opts ["-m" "cognitect.test-runner"]
+   :exec-fn cognitect.test-runner.api/test
+   :exec-args  {:patterns ["metabase.driver.ocient-unit-test"]}}
+
+ ;; includes test code as source paths. Run tests with clojure -X:dev:test
+  :test
+  {:extra-paths ["test" "metabase/test" "metabase/dev/src" "metabase/local/src" "metabase/shared/test" "metabase/test_resources"]
+   :extra-deps {io.github.cognitect-labs/test-runner
+                {:git/tag "v0.5.0" :git/sha "b3fd0d2"}}
+   :main-opts ["-m" "cognitect.test-runner"]
+   :exec-fn cognitect.test-runner.api/test
+   :exec-args  {:patterns ["metabase.driver.ocient-test"]}
+   :jvm-opts ["-Dmb.run.mode=test"
+              "-Dmb.db.in.memory=true"
+              "-Dmb.jetty.join=false"
+              "-Dmb.field.filter.operators.enabled=true"
+              "-Dmb.api.key=test-api-key"
+             ;; Different port from normal `:dev` so you can run tests on a different server.
+             ;; TODO -- figure out how to do a random port like in the old project.clj?
+              "-Dmb.jetty.port=3001"
+              "-Dmb.ocient.test.host=localhost"
+              "-Dmb.ocient.test.port=4050"]}}}

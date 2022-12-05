@@ -12,9 +12,7 @@
                   (testing " marshal additional options"
                     (is (= {:classname   "com.ocient.jdbc.JDBCDriver"
                             :subprotocol "ocient"
-                            :sslmode     "disable"
                             :statementPooling     "OFF"
-                            :force       "true"
                             :subname     "//sales-sql0:4050/metabase;loglevel=DEBUG;logfile=jdbc_trace.out"}
                            (sql-jdbc.conn/connection-details->spec :ocient {:host               "sales-sql0"
                                                                             :port               4050
@@ -23,9 +21,7 @@
                   (testing " marshal Single Sign-On tokens"
                     (is (= {:classname   "com.ocient.jdbc.JDBCDriver"
                             :subprotocol "ocient"
-                            :sslmode     "disable"
                             :statementPooling     "OFF"
-                            :force       "true"
                             :subname     "//sales-sql0:4050/metabase"
                             :handshake   "SSO"
                             :user        "access_token"
@@ -39,9 +35,7 @@
                   (testing " strip trailing semicolon in additional options"
                     (is (= {:classname   "com.ocient.jdbc.JDBCDriver"
                             :subprotocol "ocient"
-                            :sslmode     "disable"
                             :statementPooling     "OFF"
-                            :force       "true"
                             :subname     "//sales-sql0:4050/metabase;loglevel=DEBUG"}
                            (sql-jdbc.conn/connection-details->spec :ocient {:host               "sales-sql0"
                                                                             :port               4050
