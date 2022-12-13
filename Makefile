@@ -45,9 +45,7 @@ test-tarball:
 		.
 
 test-tarball123:
-	pwd
-	ls
-	echo "test" > target/test123.txt
+	echo "test" > test123.txt
 
 # Build the Metabase container
 docker-build:
