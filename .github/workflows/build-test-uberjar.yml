@@ -2,9 +2,6 @@ name: build-test-uberjar
 run-name: Build test uberjar on branch ${{ inputs.branch }}
 
 on:
-  push:
-    branches:
-      - '**'
   workflow_dispatch:
     inputs:
       branch: {required: true, type: string, description: Branch to build test uberjar from}
