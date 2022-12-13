@@ -1,0 +1,34 @@
+name: build-test-uberjar
+run-name: Build test uberjar on branch ${{ inputs.branch }}
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+    inputs:
+      branch: {required: true, type: string, description: Branch to build test uberjar from}
+
+jobs:
+  build-uberjar:
+    name: Runs jobname
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code       # https://github.com/actions/checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.branch }}
+
+      # Set up docker container to run test-tarball
+      
+      - name: Run test-tarball
+        run: make test-tarball123 #run: make test-tarball
+      
+      - name: Upload test uberjar as artifact
+        uses: actions/upload-artifact@v3 # https://github.com/actions/upload-artifact
+        with:
+          name: my-artifact
+          path: ./target/test*.txt # path: ./target/metabase_test_*.tar.gz
+          retention-days: 1
+
+#https://stackoverflow.com/questions/63362126/github-actions-how-to-run-a-workflow-created-on-a-non-master-branch-from-the-wo
