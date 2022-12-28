@@ -22,8 +22,8 @@ build:
 	clojure -X:build :project-dir "\"$(shell pwd)\""
 
 # Run Metabase
-run: build
-	clojure -X:run :project-dir "\"$(shell pwd)\""
+run:
+	clojure -M:run > $(shell pwd)/metabase.log 2>&1 &
 
 # Run Ocient unit tests
 run-unit-test:

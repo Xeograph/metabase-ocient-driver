@@ -60,6 +60,15 @@
                  ;; prevent Java icon from randomly popping up in macOS dock
                  "-Djava.awt.headless=true"]}
 
+  ;; run the dev server with
+  ;; clojure -M:run
+  :run
+  {:extra-deps {metabase/metabase-core {:local/root "metabase"}}
+   :main-opts ["-m" "metabase.core"]
+   :jvm-opts  ["-Dmb.run.mode=dev"
+               "-Djava.awt.headless=true"                   ; prevent Java icon from randomly popping up in macOS dock
+               "-Dmb.jetty.port=3000"]}
+
   ;; includes unit test code as source paths. Run unit tests with clojure -X:dev:unit-test
   :unit-test
   {:extra-paths ["test" "metabase/test"]
