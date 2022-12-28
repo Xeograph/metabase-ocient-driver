@@ -10,13 +10,21 @@ ARG METABASE_EDITION
 ARG METABASE_VERSION
 
 # Reequirements for building the driver
-RUN apt-get update && \
-    apt-get install -y \
+RUN apt-get update \
+    && apt-get install -y \
     curl \
+    jq \
     make \
+    npm \
     unzip \
+    && curl -fsSL https://deb.nodesource.com/setup_16.x | bash - \
+    && curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - \
+    && echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list \
+    && apt-get update \
+    && apt-get install -y nodejs \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g yarn
 
 # Set our base workdir
 WORKDIR /build
@@ -50,6 +58,9 @@ FROM stg_base AS stg_driver
 COPY deps.edn ./
 COPY resources ./resources
 COPY src ./src
+
+RUN --mount=type=cache,target=/root/.m2/repository \
+    clojure -X:deps prep
 
 
 ##############
@@ -95,13 +106,14 @@ COPY --from=stg_build /build/target/ocient.metabase-driver.jar /
 ####################
 FROM stg_base as stg_test_uberjar
 
+ARG METABASE_EDITION
+
 WORKDIR /build/metabase
 
 COPY deps.edn /build/metabase/modules/drivers/ocient/
-COPY src/ /build/metabase/modules/drivers/ocient/src
+COPY src/ /build/metabase/modules/drivers/ocient/
 COPY resources/metabase-plugin.yaml /build/metabase/modules/drivers/ocient/resources/
-COPY test/metabase/test/data/* ./test/metabase/test/data/
-COPY test/metabase/driver/* ./test/metabase/driver/
+COPY test/ /build/metabase/modules/drivers/ocient/
 
 # FIXME Can we get rid of the patch here and build an uberjar via clojure???
 COPY patches/test-tarball.patch /build/
@@ -109,6 +121,15 @@ RUN git apply /build/test-tarball.patch
 
 RUN --mount=type=cache,target=/root/.m2/repository \
     clojure -X:test:deps prep
+
+ENV CI=true
+ENV INTERACTIVE=false
+ENV MB_EDITION=${METABASE_EDITION}
+
+# Build frontend (needs to run for some frontend tests)
+RUN --mount=type=cache,target=/root/.m2/repository \
+    yarn build && \
+    yarn build-static-viz
 
 # Build the uberjar
 RUN --mount=type=cache,target=/root/.m2/repository \ 
