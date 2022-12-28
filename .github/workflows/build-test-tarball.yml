@@ -1,13 +1,13 @@
-name: build-test-uberjar
-run-name: Build test uberjar on branch ${{ inputs.branch }}
+name: build-test-tarball
+run-name: Build test tarball on branch ${{ inputs.branch }}
 
 on:
   workflow_dispatch:
     inputs:
-      branch: {required: true, type: string, description: Branch to build test uberjar from}
+      branch: {required: true, type: string, description: Branch to build test tarball from}
 
 jobs:
-  build-uberjar:
+  build-tarball:
     name: Runs jobname
     runs-on: ubuntu-latest
     steps:
@@ -19,10 +19,10 @@ jobs:
       # Set up docker container to run test-tarball
       
       - name: Run test-tarball
-        run: make test-tarball123 #run: make test-tarball
+        run: make test-tarball
       - name: Set env
         run: echo "METABASE_TEST_VERSION=$(make test-tarball-version)" >> $GITHUB_ENV
-      - name: Upload test uberjar as artifact
+      - name: Upload test tarball as artifact
         uses: actions/upload-artifact@v3 # https://github.com/actions/upload-artifact
         with:
           name: metabase_test_${{env.METABASE_TEST_VERSION}}

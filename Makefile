@@ -44,9 +44,6 @@ test-tarball:
 		 -t metabase_test_tarball:$(METABASE_TEST_TARBALL_VERSION) \
 		.
 
-test-tarball123:
-	echo "test" > test123.txt
-
 # Build the Metabase container
 docker-build:
 	DOCKER_BUILDKIT=1 docker build \
