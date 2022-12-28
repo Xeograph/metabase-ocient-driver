@@ -20,12 +20,13 @@ jobs:
       
       - name: Run test-tarball
         run: make test-tarball123 #run: make test-tarball
-      
+      - name: Set env
+        run: echo "METABASE_TEST_VERSION=$(make test-tarball-version)" >> $GITHUB_ENV
       - name: Upload test uberjar as artifact
         uses: actions/upload-artifact@v3 # https://github.com/actions/upload-artifact
         with:
-          name: my-artifact
-          path: ./test*.txt # path: ./target/metabase_test_*.tar.gz
+          name: metabase_test_${{env.METABASE_TEST_VERSION}}
+          path: ./target/metabase_test_*.tar.gz
           retention-days: 1
 
 #https://stackoverflow.com/questions/63362126/github-actions-how-to-run-a-workflow-created-on-a-non-master-branch-from-the-wo
