@@ -8,13 +8,22 @@ on:
 
 jobs:
   build-tarball:
-    name: Runs jobname
+    name: Build Metabase Test tarball
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code       # https://github.com/actions/checkout
         uses: actions/checkout@v3
         with:
           ref: ${{ inputs.branch }}
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
+      - name: Maven cache
+        uses: actions/cache@v1
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('deps.edn') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
 
       # Set up docker container to run test-tarball
       
