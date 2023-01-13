@@ -146,13 +146,16 @@
      
 (defn handle-sso-properties
   "Marshal Single Sign-On connection peroperties"
-  [{:keys [sso token-type token]
-    :or {sso false, token-type "", token ""}
+  [{:keys [sso authentication-method token-type token]
+    :or {sso false, authentication-method "", token-type "", token ""}
     :as opts}]
-  (merge (when (or sso
-                   (=
-                    (str/lower-case (:authentication-method opts))
-                    "sso"))
+  (merge (when (or
+                sso
+                (and
+                 (some? authentication-method)
+                 (=
+                  (str/lower-case authentication-method)
+                  "sso")))
            {:handshake "SSO"
             :user token-type
             :password token})
