@@ -70,8 +70,8 @@
      :type :select
      :options [{:name "Password"
                 :value "password"}
-               {:name "Single Sign-On"
-                :value "sso"}]
+               {:name "Single Sign-On (Token)"
+                :value "sso_token"}]
      :default "password"
      :placeholder "password"
      :required true}
@@ -85,11 +85,13 @@
      :default "access_token"
      :placeholder "access_token"
      :required false
-     :visible-if {:authentication-method "sso"}}
+     :visible-if {:authentication-method "sso_token"}}
     {:name "token"
+     :display-name (trs "The Single Sign-On token")
      :type :secret
      :required false
-     :visible-if {:authentication-method "sso"}}
+     :default ""
+     :visible-if {:authentication-method "sso_token"}}
     (merge driver.common/default-user-details
            {:display-name (trs "User")
             :required false
@@ -147,19 +149,43 @@
 (defn handle-sso-properties
   "Marshal Single Sign-On connection peroperties"
   [{:keys [sso authentication-method token-type token]
-    :or {sso false, authentication-method "", token-type "", token ""}
+    :or {sso false, authentication-method nil, token-type "", token ""}
     :as opts}]
-  (merge (when (or
-                sso
-                (and
-                 (some? authentication-method)
-                 (=
-                  (str/lower-case authentication-method)
-                  "sso")))
-           {:handshake "SSO"
-            :user token-type
-            :password token})
-         (dissoc opts :sso :token-type :token :authentication-method)))
+  (merge
+   (if (some? authentication-method)
+     (case (str/lower-case authentication-method)
+
+       ;; Password authentication uses the default handshake method (GCM)
+       "password"  {}
+
+       ;; The underlying JDBC driver will open a browser window if one is 
+       ;; available on the server. Otherwise, a verification URI will be
+       ;; printed to stdout. A blank username and password are used to 
+       ;; initiate the SSO flow.
+       ;;
+       ;; TODO 
+       ;; Connection threads in Metabase are independent of each other and
+       ;; break the Single Sign-On flow used in the JDBC driver. Every new
+       ;; DB connection creates a unique session.
+       ;;
+       ;; "sso"       {:handshake "SSO"
+       ;;              :user ""
+       ;;              :password ""}
+
+       ;; Single Sign-On using an Access or ID token
+       "sso_token" {:handshake "SSO"
+                    :user token-type
+                    :password token})
+
+     ;; Connection properties in the plugin manifest cannot use the :select
+     ;; type and are therfore excluded from MB instances which use that to
+     ;; populate the "Add Database" UI.
+     (when sso {:handshake "SSO"
+                :user token-type
+                :password token}))
+
+   ;; Remove unsupported JDBC connection values
+   (dissoc opts :sso :token-type :token :authentication-method)))
 
 (defmethod sql-jdbc.conn/connection-details->spec :ocient [_ {_ :ssl, :as details-map}]
   (-> details-map

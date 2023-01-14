@@ -18,7 +18,7 @@
                                                                             :port               4050
                                                                             :db                 "metabase"
                                                                             :additional-options "loglevel=DEBUG;logfile=jdbc_trace.out"}))))
-                  (testing " marshal Single Sign-On tokens (toggle)"
+                  (testing " for Single Sign-On tokens (toggle)"
                     (is (= {:classname   "com.ocient.jdbc.JDBCDriver"
                             :subprotocol "ocient"
                             :statementPooling     "OFF"
@@ -32,7 +32,7 @@
                                                                             :sso                true
                                                                             :token-type         "access_token"
                                                                             :token              "********"}))))
-                  (testing " marshal Single Sign-On tokens (drop-down)"
+                  (testing " for Single Sign-On tokens (drop-down)"
                     (is (= {:classname   "com.ocient.jdbc.JDBCDriver"
                             :subprotocol "ocient"
                             :statementPooling     "OFF"
@@ -43,7 +43,7 @@
                            (sql-jdbc.conn/connection-details->spec :ocient {:host               "sales-sql0"
                                                                             :port               4050
                                                                             :db                 "metabase"
-                                                                            :authentication-method                "sso"
+                                                                            :authentication-method                "sso_token"
                                                                             :token-type         "access_token"
                                                                             :token              "********"}))))
                   (testing " strip trailing semicolon in additional options"
