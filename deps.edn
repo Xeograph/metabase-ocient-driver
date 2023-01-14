@@ -66,6 +66,8 @@
   {:extra-deps {metabase/metabase-core {:local/root "metabase"}}
    :main-opts ["-m" "metabase.core"]
    :jvm-opts  ["-Dmb.run.mode=dev"
+               "-Dmb.jetty.async.response.timeout=86400000" ; increase query timeout (Web UI => MB)
+               "-Dmb.db.connection.timeout.ms=300000"       ; increase connection timeout to 5 minutes
                "-Djava.awt.headless=true"                   ; prevent Java icon from randomly popping up in macOS dock
                "-Dmb.jetty.port=3000"]}
 
