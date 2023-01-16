@@ -2,7 +2,7 @@
  ["src" "resources"]
 
  :deps
- {com.ocient/ocient-jdbc4$jar-with-dependencies {:mvn/version "2.94"}}
+ {com.ocient/ocient-jdbc4$jar-with-dependencies {:mvn/version "2.96"}}
 
  :mvn/repos
  {"sonatype" {:url "https://oss.sonatype.org/content/groups/staging/"}}
