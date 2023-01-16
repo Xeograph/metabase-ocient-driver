@@ -1,7 +1,7 @@
 # Complete list of options here: https://github.com/metabase/metabase/wiki/Metabase-Plugin-Manifest-Reference
 info:
   name: Metabase Ocient Driver
-  version: v0.1.0-rc.3
+  version: v0.1.0-rc.4
   description: Allows Metabase to connect to Ocient databases.
 
 driver:
