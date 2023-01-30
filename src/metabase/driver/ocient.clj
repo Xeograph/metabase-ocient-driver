@@ -79,9 +79,7 @@
      :display-name (trs "The type of the Single Sign-On token")
      :type :select
      :options [{:name "access_token"
-                :value "access_token"}
-               {:name "id_token"
-                :value "id_token"}]
+                :value "access_token"}]
      :default "access_token"
      :placeholder "access_token"
      :required false

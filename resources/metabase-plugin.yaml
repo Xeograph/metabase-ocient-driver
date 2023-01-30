@@ -29,7 +29,7 @@ driver:
       placeholder: false
     - name: token-type
       display-name: Single Sign-On Token Type
-      helper-text: "The OAuth 2.0 token type. Valid options are: 'access_token' or 'id_token'"
+      helper-text: "The OAuth 2.0 token type. Valid options are: 'access_token'"
       type: string
       placeholder: access_token
       default: access_token
