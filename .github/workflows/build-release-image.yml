@@ -31,6 +31,6 @@ jobs:
         run: DOCKER_BUILDKIT=1 docker build --target stg_export --output target .
       - uses: actions/upload-artifact@v3
         with:
-          name: ocient.metabase-driver.jar-$VERSION
+          name: ocient.metabase-driver.jar-${{ env.VERSION }}
           path: ./target/ocient.metabase-driver.jar
           retention-days: 3
