@@ -14,5 +14,5 @@ echo "Incrementing version from ${CURRENT_VERSION} to ${NEW_VERSION}"
 # Update the version
 FILES=(${ROOT_DIR}/resources/metabase-plugin.yaml ${ROOT_DIR}/project.clj)
 for i in ${!FILES[@]}; do
-  sed -i "s/${CURRENT_VERSION}/${NEW_VERSION}/g" ${FILES[$i]}
+  sed -i'' -e "s/${CURRENT_VERSION}/${NEW_VERSION}/g" ${FILES[$i]}
 done

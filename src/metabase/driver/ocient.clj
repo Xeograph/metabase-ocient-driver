@@ -21,8 +21,7 @@
             [metabase.util
              [date-2 :as u.date]
              [honeysql-extensions :as hx]]
-            [metabase.util :as u]
-            [metabase.util.i18n :refer [deferred-tru trs tru]])
+            [metabase.util :as u])
 
   (:import [java.sql PreparedStatement Types]
            [java.time LocalTime OffsetDateTime ZonedDateTime Instant OffsetTime ZoneId]
@@ -66,7 +65,7 @@
      :type :schema-filters
      :display-name "Schemas"}
     {:name "authentication-method"
-     :display-name (trs "The authentication method used to connect to the database")
+     :display-name "The authentication method used to connect to the database"
      :type :select
      :options [{:name "Password"
                 :value "password"}
@@ -76,7 +75,7 @@
      :placeholder "password"
      :required true}
     {:name "token-type"
-     :display-name (trs "The type of the Single Sign-On token")
+     :display-name "The type of the Single Sign-On token"
      :type :select
      :options [{:name "access_token"
                 :value "access_token"}]
@@ -85,18 +84,18 @@
      :required false
      :visible-if {:authentication-method "sso_token"}}
     {:name "token"
-     :display-name (trs "The Single Sign-On token")
+     :display-name "The Single Sign-On token"
      :type :secret
      :required false
      :default ""
      :visible-if {:authentication-method "sso_token"}}
     (merge driver.common/default-user-details
-           {:display-name (trs "User")
+           {:display-name "User"
             :required false
             :default ""
             :visible-if {:authentication-method "password"}})
     (merge driver.common/default-password-details
-           {:display-name (trs "Password")
+           {:display-name "Password"
             :required false
             :default ""
             :visible-if {:authentication-method "password"}})
