@@ -27,6 +27,8 @@
            [java.time LocalTime OffsetDateTime ZonedDateTime Instant OffsetTime ZoneId]
            [java.util Calendar TimeZone]))
 
+;; HoneySQL 1 is deprecated
+
 ; ;;; +----------------------------------------------------------------------------------------------------------------+
 ; ;;; |                                         metabase.driver impls                                                  |
 ; ;;; +----------------------------------------------------------------------------------------------------------------+
@@ -43,15 +45,15 @@
   [_]
   ;; From the Ocient user docs for WEEK()
   ;;
-  ;; The ISO-8601 week number that the timestamp / day is in. 
-  ;; The week starts on Monday and the first week of a year contains 
-  ;; January 4 of that year. See https://en.wikipedia.org/wiki/ISO_week_date 
+  ;; The ISO-8601 week number that the timestamp / day is in.
+  ;; The week starts on Monday and the first week of a year contains
+  ;; January 4 of that year. See https://en.wikipedia.org/wiki/ISO_week_date
   ;; for more details.
   :monday)
 
 (defmethod driver/connection-properties :ocient
   [_]
-  ;; TODO 
+  ;; TODO
   ;;
   ;; Metabase doesn't allow lazily loaded drivers to define connection
   ;; properties outside of the plugin manifest. This wouldn't be a problem,
@@ -113,54 +115,50 @@
 (defn- make-subname [host port db]
   (str "//" host ":" port "/" db))
 
-(defn handle-ocient-properties
+(defn- handle-ocient-properties
   "Create a Clojure JDBC database specification for the Ocient DB."
   [{:keys [host port db]
     :or   {host "localhost", port 4050, db "system"}
     :as   opts}]
   (merge
-   {:classname                     "com.ocient.jdbc.JDBCDriver"
-    :subprotocol                   "ocient"
-    :subname                       (make-subname host port db)
+   {:classname        "com.ocient.jdbc.JDBCDriver"
+    :subprotocol      "ocient"
+    :subname          (make-subname host port db)
     :statementPooling "OFF"}
    (dissoc opts :host :port :db)))
 
 (defn- replace-trailing-semicolon
   [s]
   ;; (log/infof "Hello from replace-trailing-semicolon: %s" (pr-str s))
-  (let [last-char (str/join "" (core/take-last 1 s))]
-    (cond-> s
-      (core/contains? #{";" "⅋"} last-char) (->>
-                                             (drop-last)
-                                             (str/join "")))))
+  (when (seq s)
+    (str/replace s #"[;⅋]$" "")))
 
 (defn- handle-additional-properties
-  "Marshal Single additional connection peroperties"
+  "Marshal Single additional connection properties"
   [opts]
-  (let [additional-options (:additional-options opts)
-        sanitized-options (cond-> opts
-                            opts (merge {:additional-options (replace-trailing-semicolon additional-options)}))]
+  (let [sanitized-options (cond-> opts
+                            opts (update :additional-options replace-trailing-semicolon))]
     ;; note: seperator style is misspelled in metabase core code
     (sql-jdbc.common/handle-additional-options sanitized-options sanitized-options, :seperator-style :semicolon)))
-     
+
 (defn handle-sso-properties
   "Marshal Single Sign-On connection peroperties"
   [{:keys [sso authentication-method token-type token]
-    :or {sso false, authentication-method nil, token-type "", token ""}
+    :or {sso false, token-type "", token ""}
     :as opts}]
   (merge
    (if (some? authentication-method)
-     (case (str/lower-case authentication-method)
+     (case (u/lower-case-en authentication-method)
 
        ;; Password authentication uses the default handshake method (GCM)
        "password"  {}
 
-       ;; The underlying JDBC driver will open a browser window if one is 
+       ;; The underlying JDBC driver will open a browser window if one is
        ;; available on the server. Otherwise, a verification URI will be
-       ;; printed to stdout. A blank username and password are used to 
+       ;; printed to stdout. A blank username and password are used to
        ;; initiate the SSO flow.
        ;;
-       ;; TODO 
+       ;; TODO
        ;; Connection threads in Metabase are independent of each other and
        ;; break the Single Sign-On flow used in the JDBC driver. Every new
        ;; DB connection creates a unique session.
@@ -172,7 +170,10 @@
        ;; Single Sign-On using an Access or ID token
        "sso_token" {:handshake "SSO"
                     :user token-type
-                    :password token})
+                    :password token}
+
+       (throw (ex-info (format "Invalid authentication method: %s" authentication-method)
+                       {:authentication-method authentication-method})))
 
      ;; Connection properties in the plugin manifest cannot use the :select
      ;; type and are therfore excluded from MB instances which use that to
@@ -206,9 +207,9 @@
     [#"VARBINARY" :type/*]
     [#"BINARY"    :type/*]
     [#"HASH"      :type/*]
-    [#"BYTE"      :type/*]
+    [#"BYTE"      :type/Integer]
     [#"POINT"     :type/*]
-    [#"LINESTRING":type/*]
+    [#"LINESTRING" :type/*]
     [#"POLYGON"   :type/*]
     [#"BIGINT"    :type/BigInteger]
     [#"SMALLINT"  :type/Integer]
@@ -244,7 +245,7 @@
                               :standard-deviation-aggregations true
                               :expression-aggregations         true
                               :advanced-math-expressions       true
-                              ;; DB-20497 Ocient does not support SELECT alias.* and 
+                              ;; DB-20497 Ocient does not support SELECT alias.* and
                               ;; the left-join tests use this pattern
                               :left-join                       (not config/is-test?)
                               :right-join                      true
@@ -256,6 +257,7 @@
                               :regex                           false
                               :binning                         true
                               :foreign-keys                    (not config/is-test?)}]
+  ;; This method is deprecated in favor of driver/database-supports?
   (defmethod driver/supports? [:ocient feature] [_ _] supported?))
 
 (def zone-id-utc "UTC Zone ID" (t/zone-id "UTC"))
@@ -264,16 +266,14 @@
   [_ rs _ i]
   (fn []
     (let [d (.getTimestamp ^java.sql.ResultSet rs ^Integer i)]
-      (if (nil? d)
-        nil
+      (when (some? d)
         (.toLocalDateTime d)))))
 
 (defmethod sql-jdbc.execute/read-column-thunk [:ocient Types/DATE]
   [_ rs _ i]
   (fn []
     (let [d (.getDate ^java.sql.ResultSet rs ^Integer i)]
-      (if (nil? d)
-        nil
+      (when (some? d)
         (.toLocalDate d)))))
 
 (defmethod sql-jdbc.execute/read-column-thunk [:ocient Types/TIME]
@@ -281,8 +281,7 @@
   ;; XGTime values are ALWAYS in UTC
   (fn []
     (let [time (.getTime ^java.sql.ResultSet rs ^Integer i)]
-      (if (nil? time)
-        nil
+      (when (some? time)
         (LocalTime/parse (.toString time))))))
 
 (defmethod sql-jdbc.execute/read-column-thunk [:ocient Types/TIMESTAMP_WITH_TIMEZONE]
@@ -298,6 +297,7 @@
   ;; XGTime values are ALWAYS in UTC
   (fn []
     (let [utc-str (.toString (.getTime ^java.sql.ResultSet rs ^Integer i))]
+      ;; I would expect an OffsetTime instance in UTC
       (LocalTime/parse utc-str))))
 
 (defmethod sql-jdbc.execute/set-parameter [:ocient java.time.OffsetDateTime]
@@ -350,7 +350,7 @@
 (defmethod sql.qp/date [:ocient :year]            [_ _ expr] (date-trunc :year expr))
 (defmethod sql.qp/date [:ocient :day-of-week]     [_ _ expr]
   (sql.qp/adjust-day-of-week :ocient
-                              (hsql/call :isodow expr)))
+                             (hsql/call :isodow expr)))
 
 
 ;; Passthrough by default
@@ -379,6 +379,7 @@
   ;; Ocient does not have a MEDIAN() function, use PERCENTILE()
   (sql.qp/->honeysql driver [:percentile arg 0.5]))
 
+;; Why cannot this be inherited from :sql?
 (defmethod sql.qp/->honeysql [:ocient :relative-datetime]
   [driver [_ amount unit]]
   (sql.qp/date driver unit (if (zero? amount)
@@ -423,8 +424,8 @@
   [table-description]
   (assoc table-description :fields
     (set (mapv #(update % :name (fn [name]  (-> name
-                                              (clojure.string/replace #"^\\([^A-Za-z])" "$1")     ;; Non-letters are escaped at beginning of column name 
-                                              (clojure.string/replace #"\\([(),.\[\]])" "$1"))))  ;; Characters (),.[] are always escaped
+                                              (str/replace #"^\\([^A-Za-z])" "$1")     ;; Non-letters are escaped at beginning of column name
+                                              (str/replace #"\\([(),.\[\]])" "$1"))))  ;; Characters (),.[] are always escaped
                        (get table-description :fields)))))
 
 (defmethod driver/describe-table :ocient
