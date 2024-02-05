@@ -13,7 +13,8 @@
   {:extra-deps {metabase/metabase-core {:local/root "metabase"}
                 metabase/build-drivers {:local/root "metabase/bin/build-drivers"
                                         ;; for whatever reason, the athena JDBC driver gets pulled in??
-                                        :exclusions  [com.metabase/athena-jdbc]}}
+                                        :exclusions  [com.metabase/athena-jdbc]}
+                javax.activation/javax.activation-api {:mvn/version "1.2.0"}}
    :exec-fn    build-drivers.build-driver/build-driver!
    :exec-args  {:driver      :ocient
                 :extra-paths ["src" "resources"]
