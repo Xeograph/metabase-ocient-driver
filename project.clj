@@ -1,4 +1,4 @@
-(defproject metabase/ocient-driver "v1.0.1-rc.1"
+(defproject metabase/ocient-driver "v1.1.0"
   :min-lein-version "2.5.0"
 
   :repositories {"project" "file:repo"}
