@@ -18,8 +18,14 @@ install:
 	git submodule update --init
 
 # Builds the Metabase Ocient driver. A single JAR executable
+# clojure -X:build :project-dir "\"$(shell pwd)\""
+# No clue why this suddenly seems to have stopped pulling the extra dep from the deps file
 build:
-	clojure -X:build :project-dir "\"$(shell pwd)\""
+	cd metabase && clojure \
+		-Sdeps "{:aliases {:ocientdriver {:extra-deps {com.metabase/ocient-driver {:local/root \"$(shell pwd)\"} javax.activation/javax.activation-api {:mvn/version \"1.2.0\"}}}}}" \
+		-X:build:ocientdriver \
+		build-drivers.build-driver/build-driver! \
+		"{:driver :ocient, :project-dir \"$(shell pwd)\", :target-dir \"$(shell pwd)/metabase/plugins\"}"
 
 # Run Metabase
 run:

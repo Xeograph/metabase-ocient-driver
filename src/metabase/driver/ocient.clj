@@ -4,9 +4,9 @@
              [set :as set]
              [string :as str]
              [core :as core]]
+            [clojure.java.jdbc :as jdbc]
             [clojure.tools.logging :as log]
-            [honeysql.core :as hsql]
-            [honeysql.format :as hformat]
+            [honey.sql :as hsql]
             [java-time :as t]
             [metabase.config :as config]
             [metabase.driver :as driver]
@@ -20,7 +20,7 @@
             [metabase.driver.sql.util.unprepare :as unprepare]
             [metabase.util
              [date-2 :as u.date]
-             [honeysql-extensions :as hx]]
+             [honey-sql-2 :as h2x]]
             [metabase.util :as u])
 
   (:import [java.sql PreparedStatement Types]
@@ -32,6 +32,10 @@
 ; ;;; +----------------------------------------------------------------------------------------------------------------+
 
 (driver/register! :ocient, :parent :sql-jdbc)
+
+(defmethod sql.qp/honey-sql-version :ocient
+  [_driver]
+  2)
 
 (defmethod driver/display-name :ocient [_] "Ocient")
 
@@ -256,7 +260,7 @@
                               :regex                           false
                               :binning                         true
                               :foreign-keys                    (not config/is-test?)}]
-  (defmethod driver/supports? [:ocient feature] [_ _] supported?))
+  (defmethod driver/database-supports? [:ocient feature] [_driver _feature _db] supported?))
 
 (def zone-id-utc "UTC Zone ID" (t/zone-id "UTC"))
 
@@ -332,25 +336,25 @@
 ; ;;; +----------------------------------------------------------------------------------------------------------------+
 
 ;; Returns the date or timestamp entered, truncated to the specified precision.
-(defn- date-trunc [unit expr] (hsql/call :date_trunc (hx/literal unit) (hx/->timestamp expr)))
+(defn- date-trunc [unit expr] [:date_trunc (h2x/literal unit) (h2x/->timestamp expr)])
 
-(defmethod sql.qp/date [:ocient :date]            [_ _ expr] (hsql/call :date expr))
+(defmethod sql.qp/date [:ocient :date]            [_ _ expr] [:date expr])
 (defmethod sql.qp/date [:ocient :minute]          [_ _ expr] (date-trunc :minute expr))
-(defmethod sql.qp/date [:ocient :minute-of-hour]  [_ _ expr] (hsql/call :minute expr))
+(defmethod sql.qp/date [:ocient :minute-of-hour]  [_ _ expr] [:minute expr])
 (defmethod sql.qp/date [:ocient :hour]            [_ _ expr] (date-trunc :hour expr))
-(defmethod sql.qp/date [:ocient :hour-of-day]     [_ _ expr] (hsql/call :hour expr))
+(defmethod sql.qp/date [:ocient :hour-of-day]     [_ _ expr] [:hour expr])
 (defmethod sql.qp/date [:ocient :day]             [_ _ expr] (date-trunc :day expr))
-(defmethod sql.qp/date [:ocient :day-of-month]    [_ _ expr] (hsql/call :day_of_month expr))
-(defmethod sql.qp/date [:ocient :day-of-year]     [_ _ expr] (hsql/call :day_of_year expr))
+(defmethod sql.qp/date [:ocient :day-of-month]    [_ _ expr] [:day_of_month expr])
+(defmethod sql.qp/date [:ocient :day-of-year]     [_ _ expr] [:day_of_year expr])
 (defmethod sql.qp/date [:ocient :week]            [_ _ expr] (sql.qp/adjust-start-of-week :ocient (partial date-trunc :week) expr))
 (defmethod sql.qp/date [:ocient :month]           [_ _ expr] (date-trunc :month expr))
-(defmethod sql.qp/date [:ocient :month-of-year]   [_ _ expr] (hsql/call :month expr))
+(defmethod sql.qp/date [:ocient :month-of-year]   [_ _ expr] [:month expr])
 (defmethod sql.qp/date [:ocient :quarter]         [_ _ expr] (date-trunc :quarter expr))
-(defmethod sql.qp/date [:ocient :quarter-of-year] [_ _ expr] (hsql/call :quarter expr))
+(defmethod sql.qp/date [:ocient :quarter-of-year] [_ _ expr] [:quarter expr])
 (defmethod sql.qp/date [:ocient :year]            [_ _ expr] (date-trunc :year expr))
 (defmethod sql.qp/date [:ocient :day-of-week]     [_ _ expr]
   (sql.qp/adjust-day-of-week :ocient
-                              (hsql/call :isodow expr)))
+                              [:isodow expr]))
 
 
 ;; Passthrough by default
@@ -358,9 +362,9 @@
 
 (defmethod sql.qp/current-datetime-honeysql-form :ocient [_] :%now)
 
-(defmethod sql.qp/unix-timestamp->honeysql [:ocient :seconds]      [_ _ expr] (hsql/call :to_timestamp expr))
-(defmethod sql.qp/unix-timestamp->honeysql [:ocient :milliseconds] [_ _ expr] (hsql/call :to_timestamp expr 3))
-(defmethod sql.qp/unix-timestamp->honeysql [:ocient :microseconds] [_ _ expr] (hsql/call :to_timestamp expr 6))
+(defmethod sql.qp/unix-timestamp->honeysql [:ocient :seconds]      [_ _ expr] [:to_timestamp expr])
+(defmethod sql.qp/unix-timestamp->honeysql [:ocient :milliseconds] [_ _ expr] [:to_timestamp expr 3])
+(defmethod sql.qp/unix-timestamp->honeysql [:ocient :microseconds] [_ _ expr] [:to_timestamp expr 6])
 
 (defmethod sql.qp/current-datetime-honeysql-form :ocient
   [_]
@@ -369,10 +373,10 @@
 (defmethod sql.qp/->honeysql [:ocient :percentile]
   [driver [_ field p]]
   ;; TODO This works but the query should really have a LIMIT 1 tacked onto the end of it...
-  (hsql/raw (format "percentile(%s, %s) over (order by %s)"
-                    (hformat/to-sql (sql.qp/->honeysql driver field))
-                    (hformat/to-sql (sql.qp/->honeysql driver p))
-                    (hformat/to-sql (sql.qp/->honeysql driver field)))))
+  [:raw (format "percentile(%s, %s) over (order by %s)"
+                    (hsql/format (sql.qp/->honeysql driver field))
+                    (hsql/format (sql.qp/->honeysql driver p))
+                    (hsql/format (sql.qp/->honeysql driver field)))])
 
 (defmethod sql.qp/->honeysql [:ocient :median]
   [driver [_ arg]]
@@ -389,34 +393,34 @@
   [driver [_ & args]]
   (->> args
        (map (partial sql.qp/->honeysql driver))
-       (reduce (partial hsql/call :concat))))
+       (reduce (partial [:concat]))))
 
 (defmethod sql.qp/add-interval-honeysql-form :ocient
   [_ hsql-form amount unit]
-  (hx/+
-   (hx/->timestamp hsql-form)
+  (h2x/+
+   (h2x/->timestamp hsql-form)
    (case unit
-     :second   (hsql/call :seconds amount)
-     :minute   (hsql/call :minutes amount)
-     :hour     (hsql/call :hours amount)
-     :day      (hsql/call :days amount)
-     :week     (hsql/call :weeks amount)
-     :month    (hsql/call :months amount)
-     :quarter  (hsql/call :months (hx/* amount (hsql/raw 3)))
-     :quarters (hsql/call :months (hx/* amount (hsql/raw 3)))
-     :year     (hsql/call :years amount))))
+     :second   [:seconds amount]
+     :minute   [:minutes amount]
+     :hour     [:hours amount]
+     :day      [:days amount]
+     :week     [:weeks amount]
+     :month    [:months amount]
+     :quarter  [:months (h2x/* amount [:raw 3])]
+     :quarters [:months (h2x/* amount [:raw 3])]
+     :year     [:years amount])))
 
 (defmethod sql.qp/unix-timestamp->honeysql [:ocient :seconds]
   [_ _ field-or-value]
-  (hsql/call :to_timestamp field-or-value))
+  [:to_timestamp field-or-value])
 
 (defmethod sql.qp/unix-timestamp->honeysql [:ocient :milliseconds]
   [driver _ field-or-value]
-  (sql.qp/unix-timestamp->honeysql driver :seconds (hx// field-or-value (hsql/raw 1000))))
+  (sql.qp/unix-timestamp->honeysql driver :seconds (h2x// field-or-value [:raw 1000])))
 
 (defmethod sql.qp/unix-timestamp->honeysql [:ocient :microseconds]
   [driver _ field-or-value]
-  (sql.qp/unix-timestamp->honeysql driver :seconds (hx// field-or-value (hsql/raw 1000000))))
+  (sql.qp/unix-timestamp->honeysql driver :seconds (h2x// field-or-value [:raw 1000000])))
 
 (defn unescape-column-names
   "Remove escape characters for column names"
@@ -426,6 +430,21 @@
                                               (clojure.string/replace #"^\\([^A-Za-z])" "$1")     ;; Non-letters are escaped at beginning of column name 
                                               (clojure.string/replace #"\\([(),.\[\]])" "$1"))))  ;; Characters (),.[] are always escaped
                        (get table-description :fields)))))
+
+;; This is a temporarily solution to hack around the fact that we need a larger JDBC-side change to be compliant with the JDBC spec for getTables
+(defn- get-views
+  "Fetch the Views for an Ocient database.
+   These are returned as a set of maps, the same format as `:tables` returned by `describe-database`."
+  [database]
+  (try (set (jdbc/query (sql-jdbc.conn/db->pooled-connection-spec database)
+                        ["SELECT schema AS \"schema\", name AS \"name\" FROM sys.views;"]))
+       (catch Throwable e
+         (log/error e "Failed to fetch views for this database"))))
+
+(defmethod driver/describe-database :ocient
+  [driver database]
+  (-> ((get-method driver/describe-database :sql-jdbc) driver database)
+      (update :tables set/union (get-views database))))
 
 (defmethod driver/describe-table :ocient
   [driver database table]

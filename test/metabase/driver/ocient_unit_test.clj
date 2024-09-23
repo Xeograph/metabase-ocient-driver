@@ -4,7 +4,7 @@
             [metabase.test :as mt]
             [metabase.test.data.sql.ddl :as ddl]
             [metabase.driver.ocient :as oc]
-            [metabase.util.honeysql-extensions :as hx]))
+            [metabase.util.honey-sql-2 :as hx]))
 
 (deftest connection-properties-test
   (mt/test-driver :ocient

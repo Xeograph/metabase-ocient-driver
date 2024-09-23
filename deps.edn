@@ -19,7 +19,7 @@
    :exec-args  {:driver      :ocient
                 :extra-paths ["src" "resources"]
                 :project-dir "."
-                :target-dir  "./plugins"}}
+                :target-dir  "./metabase/plugins"}}
 
   ;; for local development: start a REPL with
   ;;
