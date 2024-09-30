@@ -18,24 +18,19 @@ install:
 	git submodule update --init
 
 # Builds the Metabase Ocient driver. A single JAR executable
-# clojure -X:build :project-dir "\"$(shell pwd)\""
 # No clue why this suddenly seems to have stopped pulling the extra dep from the deps file
 build:
 	cd metabase && clojure \
 		-Sdeps "{:aliases {:ocient {:extra-deps {com.metabase/ocient-driver {:local/root \"$(shell pwd)\"} javax.activation/javax.activation-api {:mvn/version \"1.2.0\"}}}}}" \
 		-X:build:ocient \
 		build-drivers.build-driver/build-driver! \
-		"{:driver :ocient, :project-dir \"$(shell pwd)\", :target-dir \"$(shell pwd)/metabase/plugins\"}"
+		"{:driver :ocient, :project-dir \"$(shell pwd)\", :target-dir \"$(shell pwd)/metabase/plugins\", :extra-paths [\"src\" \"resources\"]}"
 
 # Run Metabase
-# clojure -M:run > $(shell pwd)/metabase.log 2>&1 &
 run:
-	cd metabase && clojure -M:run
+	cd metabase && clojure -M:run > $(shell pwd)/metabase.log 2>&1 &
 
 # Run Ocient unit tests
-# cd metabase && DRIVERS=ocient clojure
-# -Sdeps "{:aliases {:ocient {:extra-deps {com.metabase/ocient-driver {:local/root \"$(shell pwd)\"}}}}}"
-# :only metabase.driver.ocient-unit-test
 run-unit-test:
 	cd metabase && DRIVERS=ocient clojure -Sdeps "{:deps {com.metabase/ocient-driver {:local/root \"$(shell pwd)\"} ocient/ocient-driver-tests {:local/root \"$(shell pwd)/test\"}}}" \
 	-X:dev:drivers:drivers-dev:test :only metabase.driver.ocient-unit-test

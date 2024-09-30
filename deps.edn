@@ -7,20 +7,6 @@
  :mvn/repos
  {"sonatype" {:url "https://oss.sonatype.org/content/groups/staging/"}}
 
- ;; build the driver with clojure -X:build
- :aliases
- {:build
-  {:extra-deps {metabase/metabase-core {:local/root "metabase"}
-                metabase/build-drivers {:local/root "metabase/bin/build-drivers"
-                                        ;; for whatever reason, the athena JDBC driver gets pulled in??
-                                        :exclusions  [com.metabase/athena-jdbc]}
-                javax.activation/javax.activation-api {:mvn/version "1.2.0"}}
-   :exec-fn    build-drivers.build-driver/build-driver!
-   :exec-args  {:driver      :ocient
-                :extra-paths ["src" "resources"]
-                :project-dir "."
-                :target-dir  "./metabase/plugins"}}
-
   ;; for local development: start a REPL with
   ;;
   ;;    clojure -A:dev (basic dev REPL that includes test namespaces)
@@ -71,21 +57,6 @@
                "-Dmb.db.connection.timeout.ms=300000"       ; increase connection timeout to 5 minutes
                "-Djava.awt.headless=true"                   ; prevent Java icon from randomly popping up in macOS dock
                "-Dmb.jetty.port=3000"]}
-
-  ;; includes unit test code as source paths. Run unit tests with clojure -X:dev:unit-test
-  ;; TODO: now that we've moved from lein, I have a suspicion we don't really need this. Can we copy whatever starburst is doing?
-  ;; :unit-test
-  ;; {:extra-paths ["test", "metabase/test"]
-  ;;  :extra-deps {io.github.cognitect-labs/test-runner
-  ;;               {:git/tag "v0.5.0" :git/sha "b3fd0d2"}}
-  ;;  :main-opts ["-m" "cognitect.test-runner"]
-  ;; ;;  :exec-fn    build-drivers.build-driver/build-driver!
-  ;; ;;  :exec-args  {:driver      :ocient
-  ;; ;;               :extra-paths ["src" "resources"]
-  ;; ;;               :project-dir "."
-  ;; ;;               :target-dir  "./metabase/plugins"}}
-  ;;  :exec-fn cognitect.test-runner.api/test
-  ;;  :exec-args  {:patterns ["metabase.driver.ocient-unit-test"]}}
 
  ;; includes test code as source paths. Run tests with clojure -X:dev:test
   :test
