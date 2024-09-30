@@ -73,13 +73,19 @@
                "-Dmb.jetty.port=3000"]}
 
   ;; includes unit test code as source paths. Run unit tests with clojure -X:dev:unit-test
-  :unit-test
-  {:extra-paths ["test" "metabase/test"]
-   :extra-deps {io.github.cognitect-labs/test-runner
-                {:git/tag "v0.5.0" :git/sha "b3fd0d2"}}
-   :main-opts ["-m" "cognitect.test-runner"]
-   :exec-fn cognitect.test-runner.api/test
-   :exec-args  {:patterns ["metabase.driver.ocient-unit-test"]}}
+  ;; TODO: now that we've moved from lein, I have a suspicion we don't really need this. Can we copy whatever starburst is doing?
+  ;; :unit-test
+  ;; {:extra-paths ["test", "metabase/test"]
+  ;;  :extra-deps {io.github.cognitect-labs/test-runner
+  ;;               {:git/tag "v0.5.0" :git/sha "b3fd0d2"}}
+  ;;  :main-opts ["-m" "cognitect.test-runner"]
+  ;; ;;  :exec-fn    build-drivers.build-driver/build-driver!
+  ;; ;;  :exec-args  {:driver      :ocient
+  ;; ;;               :extra-paths ["src" "resources"]
+  ;; ;;               :project-dir "."
+  ;; ;;               :target-dir  "./metabase/plugins"}}
+  ;;  :exec-fn cognitect.test-runner.api/test
+  ;;  :exec-args  {:patterns ["metabase.driver.ocient-unit-test"]}}
 
  ;; includes test code as source paths. Run tests with clojure -X:dev:test
   :test

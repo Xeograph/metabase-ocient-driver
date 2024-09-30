@@ -22,18 +22,23 @@ install:
 # No clue why this suddenly seems to have stopped pulling the extra dep from the deps file
 build:
 	cd metabase && clojure \
-		-Sdeps "{:aliases {:ocientdriver {:extra-deps {com.metabase/ocient-driver {:local/root \"$(shell pwd)\"} javax.activation/javax.activation-api {:mvn/version \"1.2.0\"}}}}}" \
-		-X:build:ocientdriver \
+		-Sdeps "{:aliases {:ocient {:extra-deps {com.metabase/ocient-driver {:local/root \"$(shell pwd)\"} javax.activation/javax.activation-api {:mvn/version \"1.2.0\"}}}}}" \
+		-X:build:ocient \
 		build-drivers.build-driver/build-driver! \
 		"{:driver :ocient, :project-dir \"$(shell pwd)\", :target-dir \"$(shell pwd)/metabase/plugins\"}"
 
 # Run Metabase
+# clojure -M:run > $(shell pwd)/metabase.log 2>&1 &
 run:
-	clojure -M:run > $(shell pwd)/metabase.log 2>&1 &
+	cd metabase && clojure -M:run
 
 # Run Ocient unit tests
+# cd metabase && DRIVERS=ocient clojure
+# -Sdeps "{:aliases {:ocient {:extra-deps {com.metabase/ocient-driver {:local/root \"$(shell pwd)\"}}}}}"
+# :only metabase.driver.ocient-unit-test
 run-unit-test:
-	DRIVERS=ocient clojure -X:dev:unit-test :project-dir "\"$(shell pwd)\""
+	cd metabase && DRIVERS=ocient clojure -Sdeps "{:deps {com.metabase/ocient-driver {:local/root \"$(shell pwd)\"} ocient/ocient-driver-tests {:local/root \"$(shell pwd)/test\"}}}" \
+	-X:dev:drivers:drivers-dev:test :only metabase.driver.ocient-unit-test
 
 # Builds the test tarball which can be deployed in environments with JAVA installed
 test-tarball:
