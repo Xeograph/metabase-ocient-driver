@@ -18,7 +18,6 @@ install:
 	git submodule update --init
 
 # Builds the Metabase Ocient driver. A single JAR executable
-# No clue why this suddenly seems to have stopped pulling the extra dep from the deps file
 build:
 	cd metabase && clojure \
 		-Sdeps "{:aliases {:ocient {:extra-deps {com.metabase/ocient-driver {:local/root \"$(shell pwd)\"} javax.activation/javax.activation-api {:mvn/version \"1.2.0\"}}}}}" \
