@@ -27,7 +27,7 @@ build:
 
 # Run Metabase
 run:
-	cd metabase && clojure -M:run > $(shell pwd)/metabase.log 2>&1 &
+	cd metabase && clojure -X:deps prep && cd modules/drivers && clojure -X:deps prep && cd ../.. && clojure -M:run > $(shell pwd)/metabase.log 2>&1 &
 
 # Run Ocient unit tests
 run-unit-test:

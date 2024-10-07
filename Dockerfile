@@ -1,15 +1,15 @@
-ARG METABASE_VERSION=v0.44.4
+ARG METABASE_VERSION=v0.50.1
 ARG METABASE_EDITION=oss
 
 #################
 # Metabase repo #
 #################
-FROM clojure:openjdk-11-tools-deps-slim-buster AS stg_base
+FROM clojure:temurin-11-tools-deps-jammy AS stg_base
 
 ARG METABASE_EDITION
 ARG METABASE_VERSION
 
-# Reequirements for building the driver
+# Requirements for building the driver
 RUN apt-get update \
     && apt-get install -y \
     curl \
@@ -17,14 +17,13 @@ RUN apt-get update \
     make \
     npm \
     unzip \
-    && curl -fsSL https://deb.nodesource.com/setup_16.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - \
     && echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list \
     && apt-get update \
-    && apt-get install -y nodejs \
+    && npm install -g yarn \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && npm install -g yarn
+    && rm -rf /var/lib/apt/lists/*
 
 # Set our base workdir
 WORKDIR /build
@@ -36,17 +35,6 @@ RUN git init \
 
 WORKDIR /build/metabase
 RUN git checkout $(curl -s -H "Accept: application/vnd.github+json" https://api.github.com/repos/metabase/metabase/git/ref/tags/${METABASE_VERSION} | jq .object.sha | xargs echo)
-
-# Then prep our Metabase dependencies
-# We need to build java deps
-# Ref: https://github.com/metabase/metabase/wiki/Migrating-from-Leiningen-to-tools.deps#preparing-dependencies
-RUN --mount=type=cache,target=/root/.m2/repository \
-    clojure -X:deps prep
-
-WORKDIR /build/metabase/bin
-RUN --mount=type=cache,target=/root/.m2/repository \
-    clojure -X:deps prep
-
 
 WORKDIR /build
 
@@ -62,20 +50,38 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.m2/repository \
     clojure -X:deps prep
 
+# Then prep our Metabase dependencies
+# We need to build java deps
+# Ref: https://github.com/metabase/metabase/wiki/Migrating-from-Leiningen-to-tools.deps#preparing-dependencies
+WORKDIR /build/metabase
+
+RUN --mount=type=cache,target=/root/.m2/repository \
+    clojure -X:deps prep
+
+WORKDIR /build/metabase/bin
+RUN --mount=type=cache,target=/root/.m2/repository \
+    clojure -X:deps prep
+
+WORKDIR /build/metabase/modules/drivers
+RUN --mount=type=cache,target=/root/.m2/repository \
+    clojure -X:deps prep
+
 
 ##############
 # Test stage #
 ##############
 FROM stg_driver as stg_unit_test
 
-COPY test ./
+WORKDIR /build
+
+COPY test ./test
 
 # Run the unit tests
 RUN --mount=type=cache,target=/root/.m2/repository \
+    cd metabase && \
     CI=true \
-    DRIVERS=ocient \
-    clojure -X:dev:unit-test \
-    :project-dir "\"$(pwd)\""
+    DRIVERS=ocient clojure -Sdeps "{:deps {com.metabase/ocient-driver {:local/root \"/build\"} ocient/ocient-driver-tests {:local/root \"/build/test\"}}}" \
+	-X:dev:drivers:drivers-dev:test :only metabase.driver.ocient-unit-test
 
 
 ###############
@@ -88,10 +94,11 @@ RUN --mount=type=cache,target=/root/.m2/repository \
     :project-dir "\"$(pwd)\""
 
 # Then build the driver
-RUN clojure -X:build \
-    :project-dir "\"$(pwd)\"" \
-    :target-dir  "./target" \
-    -v 100
+RUN cd metabase && clojure \
+        -Sdeps "{:aliases {:ocient {:extra-deps {com.metabase/ocient-driver {:local/root \"/build\"} javax.activation/javax.activation-api {:mvn/version \"1.2.0\"}}}}}" \
+        -X:build:ocient \
+        build-drivers.build-driver/build-driver! \
+        "{:driver :ocient, :project-dir \"/build\", :target-dir \"/build/target\", :extra-paths [\"/build/src\" \"/build/resources\"]}"
 
 
 ############################
