@@ -29,6 +29,10 @@ build:
 run:
 	cd metabase && clojure -X:deps prep && cd modules/drivers && clojure -X:deps prep && cd ../.. && clojure -M:run > $(shell pwd)/metabase.log 2>&1 &
 
+# Run Metabase, but output all logs to the CLI
+run-log-in-cli:
+	cd metabase && clojure -X:deps prep && cd modules/drivers && clojure -X:deps prep && cd ../.. && clojure -M:run
+
 # Run Ocient unit tests
 run-unit-test:
 	cd metabase && DRIVERS=ocient clojure -Sdeps "{:deps {com.metabase/ocient-driver {:local/root \"$(shell pwd)\"} ocient/ocient-driver-tests {:local/root \"$(shell pwd)/test\"}}}" \

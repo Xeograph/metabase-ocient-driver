@@ -123,8 +123,8 @@ COPY resources/metabase-plugin.yaml /build/metabase/modules/drivers/ocient/resou
 COPY test/ /build/metabase/modules/drivers/ocient/
 
 # FIXME Can we get rid of the patch here and build an uberjar via clojure???
-COPY patches/test-tarball.patch /build/
-RUN git apply /build/test-tarball.patch
+# COPY patches/test-tarball.patch /build/
+# RUN git apply /build/test-tarball.patch
 
 RUN --mount=type=cache,target=/root/.m2/repository \
     clojure -X:test:deps prep

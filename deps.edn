@@ -75,4 +75,9 @@
              ;; TODO -- figure out how to do a random port like in the old project.clj?
               "-Dmb.jetty.port=3001"
               "-Dmb.ocient.test.host=localhost"
-              "-Dmb.ocient.test.port=4050"]}}
+              "-Dmb.ocient.test.port=4050"]}
+              
+;; :build/uberjar
+;;   {:exec-fn build.uberjar/uberjar}   
+
+}
