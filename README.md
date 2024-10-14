@@ -50,6 +50,8 @@ For the front-end, you also should use whatever node version was LTS _at the tim
 
 For the front-end: `yarn build-hot` (hot reloading enabled). This will run on localhost port 3000.
 
+If that doesn't work, for some reason `yarn build` follow by `yarn dev` does?
+
 ### Run unit tests
 To run the unit tests against the Ocient driver, run:
 
