@@ -354,7 +354,7 @@
     @statements))
 
 ;; Ocient has different syntax for inserting multiple rows, it looks like:
-
+;;
 ;;    INSERT INTO table
 ;;        SELECT val1,val2 UNION ALL
 ;;        SELECT val1,val2 UNION ALL;
@@ -368,16 +368,8 @@
              columns                    (keys (first rows))
                   values  (for [row rows]
                             (for [value (map row columns)]
-                                    (sql.qp/->honeysql driver (->insertable value))
-                                )
-                                )
-                  ]
-                  (for [row values] {:select (for [item row] [item])})
-                  ))
-   
-    
-    }]}
-  )
+                                    (sql.qp/->honeysql driver (->insertable value))))]
+                  (for [row values] {:select (for [item row] [item])})))}]})
 
 ;; Ocient requires a timestamp column and a clustering index key. These fields are prepended to the field definitions
 (defmethod sql.tx/create-table-sql :ocient

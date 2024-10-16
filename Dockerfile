@@ -37,6 +37,21 @@ RUN git init \
 WORKDIR /build/metabase
 RUN git checkout $(curl -s -H "Accept: application/vnd.github+json" https://api.github.com/repos/metabase/metabase/git/ref/tags/${METABASE_VERSION} | jq .object.sha | xargs echo)
 
+# Then prep our Metabase dependencies
+# We need to build java deps
+# Ref: https://github.com/metabase/metabase/wiki/Migrating-from-Leiningen-to-tools.deps#preparing-dependencies
+
+RUN --mount=type=cache,target=/root/.m2/repository \
+    clojure -X:deps prep
+
+WORKDIR /build/metabase/bin
+RUN --mount=type=cache,target=/root/.m2/repository \
+    clojure -X:deps prep
+
+WORKDIR /build/metabase/modules/drivers
+RUN --mount=type=cache,target=/root/.m2/repository \
+    clojure -X:deps prep
+
 WORKDIR /build
 
 ################
@@ -51,29 +66,11 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.m2/repository \
     clojure -X:deps prep
 
-# Then prep our Metabase dependencies
-# We need to build java deps
-# Ref: https://github.com/metabase/metabase/wiki/Migrating-from-Leiningen-to-tools.deps#preparing-dependencies
-WORKDIR /build/metabase
-
-RUN --mount=type=cache,target=/root/.m2/repository \
-    clojure -X:deps prep
-
-WORKDIR /build/metabase/bin
-RUN --mount=type=cache,target=/root/.m2/repository \
-    clojure -X:deps prep
-
-WORKDIR /build/metabase/modules/drivers
-RUN --mount=type=cache,target=/root/.m2/repository \
-    clojure -X:deps prep
-
 
 ##############
 # Test stage #
 ##############
 FROM stg_driver as stg_unit_test
-
-WORKDIR /build
 
 COPY test ./test
 
@@ -122,10 +119,6 @@ COPY deps.edn /build/metabase/modules/drivers/ocient/
 COPY src/ /build/metabase/modules/drivers/ocient/
 COPY resources/metabase-plugin.yaml /build/metabase/modules/drivers/ocient/resources/
 COPY test/ /build/metabase/modules/drivers/ocient/
-
-# FIXME Can we get rid of the patch here and build an uberjar via clojure???
-# COPY patches/test-tarball.patch /build/
-# RUN git apply /build/test-tarball.patch
 
 RUN --mount=type=cache,target=/root/.m2/repository \
     clojure -X:test:deps prep

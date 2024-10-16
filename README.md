@@ -48,9 +48,7 @@ make run
 
 For the front-end, you also should use whatever node version was LTS _at the time of whatever metabase version is being used_.
 
-For the front-end: `yarn build-hot` (hot reloading enabled). This will run on localhost port 3000.
-
-If that doesn't work, for some reason `yarn build` follow by `yarn dev` does?
+For the front-end: `yarn build-hot` (hot reloading enabled). This will run on localhost port 3000. If this results in a white screen with the console showing resources failing to load, you may need to run `yarn build` first.
 
 ### Run unit tests
 To run the unit tests against the Ocient driver, run:

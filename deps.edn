@@ -76,8 +76,5 @@
               "-Dmb.jetty.port=3001"
               "-Dmb.ocient.test.host=localhost"
               "-Dmb.ocient.test.port=4050"]}
-              
-;; :build/uberjar
-;;   {:exec-fn build.uberjar/uberjar}   
 
 }
