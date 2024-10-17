@@ -4,7 +4,7 @@
             [metabase.test :as mt]
             [metabase.test.data.sql.ddl :as ddl]
             [metabase.driver.ocient :as oc]
-            [metabase.util.honeysql-extensions :as hx]))
+            [metabase.util.honey-sql-2 :as hx]))
 
 (deftest connection-properties-test
   (mt/test-driver :ocient
@@ -66,7 +66,7 @@
                              "A"
                              "B"
                              "C"]]
-                           (ddl/insert-rows-ddl-statements :ocient (hx/identifier :table "my_db" "my_table") [{:col1 "A", :col2 1}
+                           (ddl/insert-rows-ddl-statements :ocient (hx/identifier :table "metabase" "my_table") [{:col1 "A", :col2 1}
                                                                                                               {:col1 "B", :col2 2}
                                                                                                               {:col1 "C", :col2 3}]))))))
 

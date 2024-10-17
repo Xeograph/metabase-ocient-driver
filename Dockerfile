@@ -1,23 +1,23 @@
-ARG METABASE_VERSION=v0.44.4
+ARG METABASE_VERSION=v0.50.1
 ARG METABASE_EDITION=oss
 
 #################
 # Metabase repo #
 #################
-FROM clojure:openjdk-11-tools-deps-slim-buster AS stg_base
+FROM clojure:temurin-11-tools-deps-jammy AS stg_base
 
 ARG METABASE_EDITION
 ARG METABASE_VERSION
 
-# Reequirements for building the driver
+# Requirements for building the driver.
+# The nodejs binary contains npm, so we don't need to reinstall it
 RUN apt-get update \
     && apt-get install -y \
     curl \
     jq \
     make \
-    npm \
     unzip \
-    && curl -fsSL https://deb.nodesource.com/setup_16.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - \
     && echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list \
     && apt-get update \
@@ -40,6 +40,7 @@ RUN git checkout $(curl -s -H "Accept: application/vnd.github+json" https://api.
 # Then prep our Metabase dependencies
 # We need to build java deps
 # Ref: https://github.com/metabase/metabase/wiki/Migrating-from-Leiningen-to-tools.deps#preparing-dependencies
+
 RUN --mount=type=cache,target=/root/.m2/repository \
     clojure -X:deps prep
 
@@ -47,6 +48,9 @@ WORKDIR /build/metabase/bin
 RUN --mount=type=cache,target=/root/.m2/repository \
     clojure -X:deps prep
 
+WORKDIR /build/metabase/modules/drivers
+RUN --mount=type=cache,target=/root/.m2/repository \
+    clojure -X:deps prep
 
 WORKDIR /build
 
@@ -68,14 +72,14 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 ##############
 FROM stg_driver as stg_unit_test
 
-COPY test ./
+COPY test ./test
 
 # Run the unit tests
 RUN --mount=type=cache,target=/root/.m2/repository \
+    cd metabase && \
     CI=true \
-    DRIVERS=ocient \
-    clojure -X:dev:unit-test \
-    :project-dir "\"$(pwd)\""
+    DRIVERS=ocient clojure -Sdeps "{:deps {com.metabase/ocient-driver {:local/root \"/build\"} ocient/ocient-driver-tests {:local/root \"/build/test\"}}}" \
+	-X:dev:drivers:drivers-dev:test :only metabase.driver.ocient-unit-test
 
 
 ###############
@@ -88,10 +92,11 @@ RUN --mount=type=cache,target=/root/.m2/repository \
     :project-dir "\"$(pwd)\""
 
 # Then build the driver
-RUN clojure -X:build \
-    :project-dir "\"$(pwd)\"" \
-    :target-dir  "./target" \
-    -v 100
+RUN cd metabase && clojure \
+        -Sdeps "{:aliases {:ocient {:extra-deps {com.metabase/ocient-driver {:local/root \"/build\"} javax.activation/javax.activation-api {:mvn/version \"1.2.0\"}}}}}" \
+        -X:build:ocient \
+        build-drivers.build-driver/build-driver! \
+        "{:driver :ocient, :project-dir \"/build\", :target-dir \"/build/target\", :extra-paths [\"/build/src\" \"/build/resources\"]}"
 
 
 ############################
@@ -115,10 +120,6 @@ COPY src/ /build/metabase/modules/drivers/ocient/
 COPY resources/metabase-plugin.yaml /build/metabase/modules/drivers/ocient/resources/
 COPY test/ /build/metabase/modules/drivers/ocient/
 
-# FIXME Can we get rid of the patch here and build an uberjar via clojure???
-COPY patches/test-tarball.patch /build/
-RUN git apply /build/test-tarball.patch
-
 RUN --mount=type=cache,target=/root/.m2/repository \
     clojure -X:test:deps prep
 
@@ -133,7 +134,7 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 
 # Build the uberjar
 RUN --mount=type=cache,target=/root/.m2/repository \ 
-    clojure -T:dev:build uberjar
+    clojure -X:dev:build:build/uberjar
 
 
 ######################
@@ -153,6 +154,7 @@ ARG TARBALL_NAME=metabase_test_${METABASE_TEST_TARBALL_VERSION}
 WORKDIR /build
 
 # Place uberjar and remaining deps in a directory named "metabase_test" and tarball it
+#TODO: it's possible we now need to include the e2e test dependencies here
 RUN mv metabase/target/uberjar/metabase.jar metabase/ \
     && mv metabase metabase_test \
     && echo "{"\
@@ -172,7 +174,6 @@ RUN mv metabase/target/uberjar/metabase.jar metabase/ \
     && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/test_modules/drivers/driver-deprecation-test-legacy/resources/metabase-plugin.yaml \
     && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/README.md \
     && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/frontend/test/__runner__/test_db_fixture.db.mv.db \
-    && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/frontend/test/__runner__/empty.db.mv.db \
     && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/test_resources/* \
     && tar rvf metabase_test/target/${TARBALL_NAME}.tar metabase_test/test/metabase/test/data/dataset_definitions/*.edn \
     && gzip metabase_test/target/${TARBALL_NAME}.tar

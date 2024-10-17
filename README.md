@@ -35,16 +35,20 @@ If you already have a Metabase binary release (see [Metabase distribution page](
 The Ocient driver, can be built using [`Clouure Tools`](https://clojure.org/releases/tools):
 
 ```shell
-# Outputs jar to `plugins/ocient.metabase-driver.jar` 
+# Outputs jar to `metabase/plugins/ocient.metabase-driver.jar`. Should be run from the project's root directory, NOT the metabase subrepo
 make build
 ```
 
 ### Run a local Metabase instance
-To run a local instance of Metabase, run:
+To run a local instance of Metabase, run the following from the project root:
 
 ```shell
 make run
 ```
+
+For the front-end, you also should use whatever node version was LTS _at the time of whatever metabase version is being used_.
+
+For the front-end: `yarn build-hot` (hot reloading enabled). This will run on localhost port 3000. If this results in a white screen with the console showing resources failing to load, you may need to run `yarn build` first.
 
 ### Run unit tests
 To run the unit tests against the Ocient driver, run:

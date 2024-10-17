@@ -3,8 +3,7 @@
             [clojure.string :as str]
             [clojure.tools.logging :as log]
             [clojure.tools.reader.edn :as edn]
-            [honeysql.core :as hsql]
-            [honeysql.format :as hformat]
+            [honey.sql :as hsql]
             [java-time :as t]
             [medley.core :as m]
             [metabase.driver :as driver]
@@ -25,7 +24,7 @@
             [metabase.test.data.sql.ddl :as ddl]
             [metabase.util :as u]
             [metabase.util.date-2 :as u.date]
-            [metabase.util.honeysql-extensions :as hx])
+            [metabase.util.honey-sql-2 :as hx])
   (:import java.sql.SQLException
            [java.sql Connection ResultSet]))
 
@@ -360,25 +359,17 @@
 ;;        SELECT val1,val2 UNION ALL
 ;;        SELECT val1,val2 UNION ALL;
 ;;        SELECT val1,val2 UNION ALL;
-;;
-;; This custom HoneySQL type below generates the correct DDL statement
+
+;; This generates the correct DDL statement
 (defmethod ddl/insert-rows-honeysql-form :ocient
   [driver table-identifier row-or-rows]
-  (reify hformat/ToSql
-    (to-sql [_]
-      (format
-       "INSERT INTO \"%s\".\"%s\" SELECT %s"
-       session-schema
-       ((comp last :components) (into {} table-identifier))
-       (let [rows                       (u/one-or-many row-or-rows)
+  {:insert-into [[table-identifier] {:union-all (into [] 
+    (let [rows                       (u/one-or-many row-or-rows)
              columns                    (keys (first rows))
-             values  (for [row rows]
-                       (for [value (map row columns)]
-                         (hformat/to-sql
-                          (sql.qp/->honeysql driver (->insertable value)))))]
-         (str/join
-          " UNION ALL SELECT "
-          (map (fn [row] (str/join  ", " row)) values)))))))
+                  values  (for [row rows]
+                            (for [value (map row columns)]
+                                    (sql.qp/->honeysql driver (->insertable value))))]
+                  (for [row values] {:select (for [item row] [item])})))}]})
 
 ;; Ocient requires a timestamp column and a clustering index key. These fields are prepended to the field definitions
 (defmethod sql.tx/create-table-sql :ocient

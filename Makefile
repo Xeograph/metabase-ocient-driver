@@ -19,15 +19,24 @@ install:
 
 # Builds the Metabase Ocient driver. A single JAR executable
 build:
-	clojure -X:build :project-dir "\"$(shell pwd)\""
+	cd metabase && clojure \
+		-Sdeps "{:aliases {:ocient {:extra-deps {com.metabase/ocient-driver {:local/root \"$(shell pwd)\"} javax.activation/javax.activation-api {:mvn/version \"1.2.0\"}}}}}" \
+		-X:build:ocient \
+		build-drivers.build-driver/build-driver! \
+		"{:driver :ocient, :project-dir \"$(shell pwd)\", :target-dir \"$(shell pwd)/metabase/plugins\", :extra-paths [\"src\" \"resources\"]}"
 
 # Run Metabase
 run:
-	clojure -M:run > $(shell pwd)/metabase.log 2>&1 &
+	cd metabase && clojure -X:deps prep && cd modules/drivers && clojure -X:deps prep && cd ../.. && clojure -M:run > $(shell pwd)/metabase.log 2>&1 &
+
+# Run Metabase, but output all logs to the CLI
+run-log-in-cli:
+	cd metabase && clojure -X:deps prep && cd modules/drivers && clojure -X:deps prep && cd ../.. && clojure -M:run
 
 # Run Ocient unit tests
 run-unit-test:
-	DRIVERS=ocient clojure -X:dev:unit-test :project-dir "\"$(shell pwd)\""
+	cd metabase && DRIVERS=ocient clojure -Sdeps "{:deps {com.metabase/ocient-driver {:local/root \"$(shell pwd)\"} ocient/ocient-driver-tests {:local/root \"$(shell pwd)/test\"}}}" \
+	-X:dev:drivers:drivers-dev:test :only metabase.driver.ocient-unit-test
 
 # Builds the test tarball which can be deployed in environments with JAVA installed
 test-tarball:
