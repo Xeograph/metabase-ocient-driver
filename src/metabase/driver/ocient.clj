@@ -437,7 +437,7 @@
    These are returned as a set of maps, the same format as `:tables` returned by `describe-database`."
   [database]
   (try (set (jdbc/query (sql-jdbc.conn/db->pooled-connection-spec database)
-                        ["SELECT schema AS \"schema\", name AS \"name\" FROM sys.views;"]))
+                        ["LIST VIEWS;"]))
        (catch Throwable e
          (log/error e "Failed to fetch views for this database"))))
 
